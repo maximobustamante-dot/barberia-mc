@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { negocio } from '../data/negocio'
+import { servicios as serviciosLocales } from '../data/servicios'
+import { barberos as barberosLocales } from '../data/barberos'
 
 interface Opcion {
   id: number
@@ -17,6 +19,8 @@ interface Confirmada {
   barbero: string
   fecha: string
   hora: string
+  telefono?: string
+  nombre?: string
 }
 
 // Fecha de hoy en formato yyyy-mm-dd según la hora del computador
@@ -29,32 +33,59 @@ function hoy() {
 
 // '2026-11-16' → '16-11-2026'
 function formatearFecha(fecha: string) {
+  if (!fecha) return ''
   const [anio, mes, dia] = fecha.split('-')
   return `${dia}-${mes}-${anio}`
 }
 
-const campo = 'w-full rounded-lg border border-white/20 bg-white px-4 py-3 text-azul'
-const etiqueta = 'mb-2 block text-sm font-semibold'
+const horasFallback = [
+  '10:00', '11:00', '12:00', '13:00', '15:00', '16:00', '17:00', '18:00', '19:00',
+]
 
 export default function Reserva() {
-  const [servicios, setServicios] = useState<ServicioOpcion[]>([])
-  const [barberos, setBarberos] = useState<Opcion[]>([])
+  const [servicios, setServicios] = useState<ServicioOpcion[]>(serviciosLocales)
+  const [barberos, setBarberos] = useState<Opcion[]>(barberosLocales)
 
-  const [servicioId, setServicioId] = useState<number | null>(null)
-  const [barberoId, setBarberoId] = useState<number | null>(null)
-  const [fecha, setFecha] = useState('')
+  const [servicioId, setServicioId] = useState<number | null>(serviciosLocales[0]?.id ?? 1)
+  const [barberoId, setBarberoId] = useState<number | null>(barberosLocales[0]?.id ?? 1)
+  const [fecha, setFecha] = useState(hoy())
   const [hora, setHora] = useState('')
   const [nombre, setNombre] = useState('')
   const [telefono, setTelefono] = useState('')
 
-  // Horas libres, junto con la combinación servicio-barbero-fecha a la que pertenecen
+  // Horas libres
   const [horasCargadas, setHorasCargadas] = useState({ clave: '', horas: [] as string[] })
-  const [recarga, setRecarga] = useState(0) // al aumentar, vuelve a pedir las horas
+  const [recarga, setRecarga] = useState(0)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
   const [confirmada, setConfirmada] = useState<Confirmada | null>(null)
 
-  // 1. Al abrir la página: traer servicios y barberos desde la base de datos
+  // 1. Escuchar eventos de selección externa desde TarjetaServicio y TarjetaBarbero
+  useEffect(() => {
+    const onSeleccionarServicio = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail
+      if (id) {
+        setServicioId(id)
+        setHora('')
+      }
+    }
+    const onSeleccionarBarbero = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail
+      if (id) {
+        setBarberoId(id)
+        setHora('')
+      }
+    }
+
+    window.addEventListener('seleccionar-servicio', onSeleccionarServicio)
+    window.addEventListener('seleccionar-barbero', onSeleccionarBarbero)
+    return () => {
+      window.removeEventListener('seleccionar-servicio', onSeleccionarServicio)
+      window.removeEventListener('seleccionar-barbero', onSeleccionarBarbero)
+    }
+  }, [])
+
+  // 2. Traer servicios y barberos desde Supabase si está disponible
   useEffect(() => {
     if (!supabase) return
     supabase
@@ -62,9 +93,9 @@ export default function Reserva() {
       .select('id, nombre, precio, duracionMin:duracion_min')
       .order('id')
       .then(({ data }) => {
-        if (data) {
+        if (data && data.length > 0) {
           setServicios(data)
-          setServicioId(data[0]?.id ?? null)
+          setServicioId((prev) => prev ?? data[0].id)
         }
       })
     supabase
@@ -72,26 +103,31 @@ export default function Reserva() {
       .select('id, nombre')
       .order('id')
       .then(({ data }) => {
-        if (data) {
+        if (data && data.length > 0) {
           setBarberos(data)
-          setBarberoId(data[0]?.id ?? null)
+          setBarberoId((prev) => prev ?? data[0].id)
         }
       })
   }, [])
 
-  // 2. Cada vez que cambia servicio, barbero o fecha: pedir las horas libres
+  // 3. Obtener horas libres
   const clave = servicioId && barberoId && fecha ? `${servicioId}-${barberoId}-${fecha}` : ''
-  const cargandoHoras = clave !== '' && horasCargadas.clave !== clave
-  const horas = horasCargadas.clave === clave ? horasCargadas.horas : []
+  const cargandoHoras = supabase !== null && clave !== '' && horasCargadas.clave !== clave
+  const horas =
+    supabase !== null
+      ? horasCargadas.clave === clave
+        ? horasCargadas.horas
+        : []
+      : horasFallback
 
   useEffect(() => {
     if (!supabase || !clave) return
-    let vigente = true // evita mostrar una respuesta vieja si el usuario cambió algo
+    let vigente = true
     supabase
       .rpc('horas_disponibles', { p_barbero: barberoId, p_servicio: servicioId, p_fecha: fecha })
       .then(({ data, error }) => {
         if (!vigente) return
-        if (error) setError('No pudimos cargar las horas. Intenta de nuevo.')
+        if (error) setError('No pudimos cargar las horas disponibles. Intenta de nuevo.')
         const lista = error ? [] : (data as { hora: string }[]).map((h) => h.hora.slice(0, 5))
         setHorasCargadas({ clave, horas: lista })
       })
@@ -100,226 +136,416 @@ export default function Reserva() {
     }
   }, [clave, servicioId, barberoId, fecha, recarga])
 
-  // 3. Enviar la reserva
+  // Datos del servicio y barbero seleccionados para el resumen
+  const servicioActual = servicios.find((s) => s.id === servicioId)
+  const barberoActual = barberos.find((b) => b.id === barberoId)
+
+  // 4. Enviar la reserva
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!supabase || !servicioId || !barberoId || !hora) return
-    setEnviando(true)
-    setError('')
-
-    const { error } = await supabase.rpc('crear_reserva', {
-      p_barbero: barberoId,
-      p_servicio: servicioId,
-      p_fecha: fecha,
-      p_hora: hora,
-      p_nombre: nombre,
-      p_telefono: telefono,
-    })
-    setEnviando(false)
-
-    if (error) {
-      if (error.message.includes('HORA_NO_DISPONIBLE')) {
-        setError('Esa hora se acaba de ocupar. Elige otra.')
-        setHora('')
-        setHorasCargadas({ clave: '', horas: [] })
-        setRecarga((n) => n + 1)
-      } else {
-        setError('No pudimos guardar la reserva. Revisa tus datos e intenta de nuevo.')
-      }
+    if (!servicioId || !barberoId || !hora) {
+      setError('Por favor selecciona servicio, barbero, fecha y hora.')
       return
     }
 
+    setEnviando(true)
+    setError('')
+
+    if (supabase) {
+      const { error } = await supabase.rpc('crear_reserva', {
+        p_barbero: barberoId,
+        p_servicio: servicioId,
+        p_fecha: fecha,
+        p_hora: hora,
+        p_nombre: nombre,
+        p_telefono: telefono,
+      })
+      setEnviando(false)
+
+      if (error) {
+        if (error.message.includes('HORA_NO_DISPONIBLE')) {
+          setError('Esa hora se acaba de ocupar. Por favor elige otra.')
+          setHora('')
+          setHorasCargadas({ clave: '', horas: [] })
+          setRecarga((n) => n + 1)
+        } else {
+          setError('No pudimos guardar la reserva. Revisa tus datos e intenta de nuevo.')
+        }
+        return
+      }
+    } else {
+      // Si no hay Supabase configurado, completamos vía WhatsApp directo
+      const textoWA = encodeURIComponent(
+        `Hola ${negocio.nombre}, quiero confirmar una hora:\n\n` +
+          `💈 Servicio: ${servicioActual?.nombre} ($${servicioActual?.precio.toLocaleString('es-CL')})\n` +
+          `👤 Barbero: ${barberoActual?.nombre}\n` +
+          `📅 Fecha: ${formatearFecha(fecha)}\n` +
+          `⏰ Hora: ${hora}\n` +
+          `🙋‍♂️ Cliente: ${nombre}\n` +
+          `📱 Contacto: ${telefono}\n\n` +
+          `¿Me confirman la disponibilidad? Muchas gracias.`
+      )
+      window.open(`https://wa.me/${negocio.telefono}?text=${textoWA}`, '_blank')
+      setEnviando(false)
+    }
+
     setConfirmada({
-      servicio: servicios.find((s) => s.id === servicioId)?.nombre ?? '',
-      barbero: barberos.find((b) => b.id === barberoId)?.nombre ?? '',
+      servicio: servicioActual?.nombre ?? '',
+      barbero: barberoActual?.nombre ?? '',
       fecha: formatearFecha(fecha),
       hora,
+      nombre,
+      telefono,
     })
   }
 
   function nuevaReserva() {
     setConfirmada(null)
-    setFecha('')
+    setFecha(hoy())
     setHora('')
     setNombre('')
     setTelefono('')
+    setError('')
   }
 
   return (
-    <section id="reserva" className="scroll-mt-28 bg-azul px-6 py-24 text-white">
-      <div className="mx-auto grid max-w-5xl gap-12 md:grid-cols-2">
-        <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-azul-claro">Agenda tu hora</p>
-          <h2 className="mt-3 font-titulo text-4xl uppercase md:text-5xl">Reserva en línea</h2>
-          <p className="mt-6 leading-relaxed text-white/80">
-            Elige el servicio, tu barbero y una hora libre. Te contactamos por WhatsApp para
-            confirmar.
+    <section id="reserva" className="scroll-mt-24 bg-azul px-6 py-24 text-white">
+      <div className="mx-auto max-w-5xl">
+        <div className="text-center md:text-left">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-azul-claro">
+            Sistema de reservas
+          </p>
+          <h2 className="mt-2 font-titulo text-4xl uppercase md:text-5xl">
+            Agenda tu cita en segundos
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm text-white/80 sm:text-base">
+            Elige el servicio, tu barbero favorito y el horario que mejor te acomode. Confirmamos de inmediato.
           </p>
         </div>
 
-        {/* Sin Supabase configurado: se ofrece WhatsApp */}
-        {!supabase && (
-          <div className="rounded-lg bg-white/10 p-6">
-            <p className="font-semibold">Las reservas en línea no están activas.</p>
-            <p className="mt-2 text-white/80">Escríbenos y te damos una hora.</p>
-            <a
-              href={`https://wa.me/${negocio.telefono}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-6 inline-block rounded-full bg-rojo px-8 py-3 font-semibold hover:bg-rojo/90"
-            >
-              Escribir por WhatsApp
-            </a>
-          </div>
-        )}
+        {/* Pantalla de Reserva Confirmada (Comprobante / Ticket) */}
+        {confirmada ? (
+          <div
+            role="status"
+            className="mx-auto mt-12 max-w-xl overflow-hidden rounded-3xl border border-white/10 bg-[#f7f4ee] p-8 text-azul shadow-2xl"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-900/10 text-emerald-800">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Reserva recibida</p>
+                <h3 className="font-titulo text-2xl uppercase md:text-3xl">¡Hora solicitada con éxito!</h3>
+              </div>
+            </div>
 
-        {/* Reserva confirmada */}
-        {supabase && confirmada && (
-          <div className="rounded-lg bg-white p-8 text-azul" role="status">
-            <h3 className="font-titulo text-3xl uppercase">Reserva recibida</h3>
-            <p className="mt-4 leading-relaxed">
-              {confirmada.servicio} con {confirmada.barbero}, el {confirmada.fecha} a las{' '}
-              {confirmada.hora}.
+            <div className="mt-6 rounded-2xl border border-azul/10 bg-hueso p-5">
+              <dl className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <dt className="text-xs font-semibold uppercase text-azul/60">Servicio</dt>
+                  <dd className="font-bold text-azul">{confirmada.servicio}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase text-azul/60">Barbero</dt>
+                  <dd className="font-bold text-azul">{confirmada.barbero}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase text-azul/60">Fecha</dt>
+                  <dd className="font-bold text-azul">{confirmada.fecha}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase text-azul/60">Hora</dt>
+                  <dd className="font-bold text-azul">{confirmada.hora} hrs</dd>
+                </div>
+              </dl>
+            </div>
+
+            <p className="mt-5 text-sm text-azul/75">
+              Te contactaremos vía WhatsApp al número registrado para recordar tu cita. Si necesitas reprogramar, avísanos con al menos 2 horas de anticipación.
             </p>
-            <p className="mt-2 text-azul/75">Te escribiremos por WhatsApp para confirmarla.</p>
+
             <button
               type="button"
               onClick={nuevaReserva}
-              className="mt-8 rounded-full border border-azul/30 px-6 py-2 font-semibold hover:bg-azul/5"
+              className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-azul py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-all hover:bg-azul/90 active:scale-95"
             >
               Hacer otra reserva
             </button>
           </div>
-        )}
-
-        {/* Formulario */}
-        {supabase && !confirmada && (
-          <form onSubmit={enviar} className="grid gap-5">
-            <div className="grid gap-4 sm:grid-cols-[3fr_2fr]">
+        ) : (
+          <form onSubmit={enviar} className="mt-12 grid gap-10 lg:grid-cols-[1.5fr_1fr]">
+            <div className="space-y-8">
+              {/* PASO 1: Selección de Servicio */}
               <div>
-                <label htmlFor="servicio" className={etiqueta}>Servicio</label>
-                <select
-                  id="servicio"
-                  value={servicioId ?? ''}
-                  onChange={(e) => {
-                    setServicioId(Number(e.target.value))
-                    setHora('')
-                  }}
-                  className={campo}
-                >
-                  {servicios.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre} — ${s.precio.toLocaleString('es-CL')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="barbero" className={etiqueta}>Barbero</label>
-                <select
-                  id="barbero"
-                  value={barberoId ?? ''}
-                  onChange={(e) => {
-                    setBarberoId(Number(e.target.value))
-                    setHora('')
-                  }}
-                  className={campo}
-                >
-                  {barberos.map((b) => (
-                    <option key={b.id} value={b.id}>{b.nombre}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="fecha" className={etiqueta}>Fecha</label>
-              <input
-                id="fecha"
-                type="date"
-                required
-                min={hoy()}
-                value={fecha}
-                onChange={(e) => {
-                  setFecha(e.target.value)
-                  setHora('')
-                }}
-                className={campo}
-              />
-            </div>
-
-            {fecha && (
-              <fieldset>
-                <legend className={etiqueta}>Hora</legend>
-                {cargandoHoras && <p className="text-white/70">Buscando horas libres…</p>}
-                {!cargandoHoras && horas.length === 0 && (
-                  <p className="text-white/70">No quedan horas libres ese día. Prueba otra fecha o barbero.</p>
-                )}
-                {!cargandoHoras && horas.length > 0 && (
-                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-                    {horas.map((h) => (
+                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">1</span>
+                  <span>Selecciona el servicio</span>
+                </label>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {servicios.map((s) => {
+                    const seleccionado = s.id === servicioId
+                    return (
                       <button
-                        key={h}
+                        key={s.id}
                         type="button"
-                        aria-pressed={hora === h}
-                        onClick={() => setHora(h)}
-                        className={`rounded-md border py-2 text-sm font-semibold ${
-                          hora === h
-                            ? 'border-rojo bg-rojo text-white'
-                            : 'border-white/30 hover:bg-white/10'
+                        onClick={() => {
+                          setServicioId(s.id)
+                          setHora('')
+                        }}
+                        className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all ${
+                          seleccionado
+                            ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
+                            : 'border-white/10 bg-white/5 text-stone-200 hover:border-white/20 hover:bg-white/10'
                         }`}
                       >
-                        {h}
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-titulo text-lg uppercase">{s.nombre}</span>
+                          <span
+                            className={`font-titulo text-lg font-bold ${
+                              seleccionado ? 'text-rojo' : 'text-azul-claro'
+                            }`}
+                          >
+                            ${s.precio.toLocaleString('es-CL')}
+                          </span>
+                        </div>
+                        <span
+                          className={`mt-2 text-xs font-medium ${
+                            seleccionado ? 'text-azul/70' : 'text-stone-400'
+                          }`}
+                        >
+                          ⏱ {s.duracionMin} minutos
+                        </span>
                       </button>
-                    ))}
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* PASO 2: Selección de Barbero */}
+              <div>
+                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">2</span>
+                  <span>Elige a tu barbero</span>
+                </label>
+                <div className="mt-3 grid grid-cols-3 gap-3">
+                  {barberos.map((b) => {
+                    const seleccionado = b.id === barberoId
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => {
+                          setBarberoId(b.id)
+                          setHora('')
+                        }}
+                        className={`flex flex-col items-center rounded-xl border p-3.5 text-center transition-all ${
+                          seleccionado
+                            ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
+                            : 'border-white/10 bg-white/5 text-stone-200 hover:border-white/20 hover:bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold uppercase ${
+                            seleccionado ? 'bg-rojo text-white' : 'bg-white/10 text-stone-300'
+                          }`}
+                        >
+                          {b.nombre.slice(0, 2)}
+                        </div>
+                        <span className="mt-2 font-titulo text-sm uppercase tracking-wide">
+                          {b.nombre}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* PASO 3: Fecha y Horas Disponibles */}
+              <div>
+                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">3</span>
+                  <span>Fecha y horario</span>
+                </label>
+
+                <div className="mt-3">
+                  <input
+                    id="fecha"
+                    type="date"
+                    required
+                    min={hoy()}
+                    value={fecha}
+                    onChange={(e) => {
+                      setFecha(e.target.value)
+                      setHora('')
+                    }}
+                    className="w-full rounded-xl border border-white/15 bg-[#f7f4ee] px-4 py-3 text-azul font-semibold shadow-sm focus:border-rojo focus:ring-1 focus:ring-rojo/30"
+                  />
+                </div>
+
+                {fecha && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-stone-300">
+                      Horarios disponibles para {formatearFecha(fecha)}:
+                    </p>
+
+                    {cargandoHoras ? (
+                      <p className="mt-3 text-sm text-stone-400 animate-pulse">
+                        Buscando horas libres…
+                      </p>
+                    ) : horas.length === 0 ? (
+                      <p className="mt-3 text-sm text-stone-300">
+                        No hay horas libres para esta fecha o barbero. Elige otro día.
+                      </p>
+                    ) : (
+                      <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
+                        {horas.map((h) => {
+                          const seleccionada = hora === h
+                          return (
+                            <button
+                              key={h}
+                              type="button"
+                              onClick={() => setHora(h)}
+                              className={`rounded-xl border py-2.5 text-center text-xs font-bold transition-all ${
+                                seleccionada
+                                  ? 'border-rojo bg-rojo text-[#f7f4ee] shadow-md shadow-black/30 scale-105'
+                                  : 'border-white/15 bg-white/5 text-stone-300 hover:border-white/30 hover:bg-white/10'
+                              }`}
+                            >
+                              {h}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
-              </fieldset>
-            )}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="nombre" className={etiqueta}>Nombre</label>
-                <input
-                  id="nombre"
-                  required
-                  minLength={2}
-                  maxLength={80}
-                  autoComplete="name"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  className={campo}
-                />
               </div>
+
+              {/* PASO 4: Datos del cliente */}
               <div>
-                <label htmlFor="telefono" className={etiqueta}>Teléfono (WhatsApp)</label>
-                <input
-                  id="telefono"
-                  type="tel"
-                  required
-                  pattern="\+?[0-9 ]{8,16}"
-                  title="Solo números, por ejemplo +56 9 1234 5678"
-                  placeholder="+56 9 1234 5678"
-                  autoComplete="tel"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                  className={campo}
-                />
+                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">4</span>
+                  <span>Tus datos de contacto</span>
+                </label>
+
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="nombre" className="mb-1 block text-xs font-semibold text-stone-300">
+                      Nombre completo
+                    </label>
+                    <input
+                      id="nombre"
+                      required
+                      placeholder="Ej: Cristian Gómez"
+                      minLength={2}
+                      maxLength={80}
+                      autoComplete="name"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-[#f7f4ee] px-4 py-3 text-sm text-azul shadow-sm focus:border-rojo focus:ring-1 focus:ring-rojo/30"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="telefono" className="mb-1 block text-xs font-semibold text-stone-300">
+                      Teléfono (WhatsApp)
+                    </label>
+                    <input
+                      id="telefono"
+                      type="tel"
+                      required
+                      placeholder="+56 9 1234 5678"
+                      pattern="\+?[0-9 ]{8,16}"
+                      autoComplete="tel"
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-[#f7f4ee] px-4 py-3 text-sm text-azul shadow-sm focus:border-rojo focus:ring-1 focus:ring-rojo/30"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            {error && (
-              <p role="alert" className="rounded-md bg-rojo/20 px-4 py-3 text-sm font-semibold">
-                {error}
-              </p>
-            )}
+            {/* Columna Derecha: Tarjeta Resumen Dinámica de la Reserva */}
+            <div>
+              <div className="sticky top-28 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl">
+                <h3 className="font-titulo text-2xl uppercase tracking-wider text-[#f5f2ec]">
+                  Resumen de tu cita
+                </h3>
+                <p className="mt-1 text-xs text-stone-400">
+                  Verifica los detalles antes de confirmar
+                </p>
 
-            <button
-              disabled={!hora || enviando}
-              className="mt-2 rounded-full bg-rojo py-3 font-semibold text-white hover:bg-rojo/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {enviando ? 'Reservando…' : hora ? `Reservar a las ${hora}` : 'Elige una hora'}
-            </button>
+                <div className="mt-6 space-y-4 border-t border-white/10 pt-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-stone-400">Servicio:</span>
+                    <span className="font-semibold text-stone-200">
+                      {servicioActual?.nombre ?? 'No seleccionado'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-stone-400">Barbero:</span>
+                    <span className="font-semibold text-stone-200">
+                      {barberoActual?.nombre ?? 'No seleccionado'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-stone-400">Fecha:</span>
+                    <span className="font-semibold text-stone-200">
+                      {formatearFecha(fecha) || 'Por definir'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-stone-400">Hora:</span>
+                    <span className="font-semibold text-stone-200">
+                      {hora ? `${hora} hrs` : 'Por seleccionar'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-stone-400">Duración:</span>
+                    <span className="font-semibold text-stone-200">
+                      {servicioActual ? `${servicioActual.duracionMin} minutos` : '—'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between border-t border-white/10 pt-4">
+                    <span className="font-titulo text-lg uppercase text-stone-200">Total a pagar:</span>
+                    <span className="font-titulo text-3xl font-bold text-azul-claro">
+                      ${servicioActual?.precio.toLocaleString('es-CL') ?? '0'}
+                    </span>
+                  </div>
+                </div>
+
+                {error && (
+                  <p role="alert" className="mt-4 rounded-xl bg-rojo/30 p-3 text-xs font-semibold text-stone-200">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!hora || enviando}
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-rojo py-4 text-center text-sm font-bold uppercase tracking-wider text-[#f5f2ec] shadow-lg shadow-black/40 transition-all hover:bg-rojo/85 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {enviando ? (
+                    <span>Procesando…</span>
+                  ) : hora ? (
+                    <span>Confirmar reserva · {hora} hrs</span>
+                  ) : (
+                    <span>Selecciona una hora</span>
+                  )}
+                </button>
+
+                <p className="mt-3 text-center text-[11px] text-stone-400">
+                  Sin pagos por adelantado · Pagas en el local al terminar
+                </p>
+              </div>
+            </div>
           </form>
         )}
       </div>

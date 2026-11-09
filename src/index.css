@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  --color-hueso: #f8f6f1;      /* blanco pastel: fondo general */
-  --color-azul: #1e3a5f;       /* azul marino: textos, títulos, navbar */
-  --color-azul-claro: #e3ecf5; /* azul pastel: fondo de secciones alternas */
-  --color-rojo: #c8102e;       /* acento: botones y detalles */
+  --color-hueso: #ece8df;      /* tono pergamino / lino mate de bajo brillo */
+  --color-azul: #121316;       /* negro carbón / ébano mate premium */
+  --color-azul-claro: #ded9cf; /* tono piedra / arena neutro mate, sin azul */
+  --color-rojo: #9e1c23;       /* carmesí / borgoña mate premium de bajo brillo */
   --font-titulo: "Oswald", sans-serif;
   --font-sans: "Inter", sans-serif;
 }
