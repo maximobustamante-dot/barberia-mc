@@ -36,7 +36,7 @@ export default function Hero() {
 
       {/* Capa 2: Contenido central */}
       <div className="relative z-10 max-w-3xl">
-        {/* Badges superiores: Estado en vivo + Calificación con brillo bajo */}
+        {/* Badges superiores: Estado en vivo */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1 text-xs font-semibold tracking-wide uppercase text-stone-300 shadow-sm backdrop-blur-md">
             <span
@@ -45,12 +45,6 @@ export default function Hero() {
               }`}
             />
             {abierto ? 'Abierto hoy' : 'Cerrado ahora · Agenda tu hora'}
-          </span>
-
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-600/25 bg-amber-600/10 px-3.5 py-1 text-xs font-semibold text-amber-200/80 shadow-sm backdrop-blur-md">
-            <span className="text-amber-400">★</span>
-            <span>4.9 en Google</span>
-            <span className="text-stone-400">· 180+ reseñas</span>
           </span>
         </div>
 

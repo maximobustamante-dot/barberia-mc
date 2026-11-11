@@ -1,8 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { negocio } from '../data/negocio'
-import { servicios as serviciosLocales } from '../data/servicios'
-import { barberos as barberosLocales } from '../data/barberos'
 
 interface Opcion {
   id: number
@@ -38,16 +36,12 @@ function formatearFecha(fecha: string) {
   return `${dia}-${mes}-${anio}`
 }
 
-const horasFallback = [
-  '10:00', '11:00', '12:00', '13:00', '15:00', '16:00', '17:00', '18:00', '19:00',
-]
-
 export default function Reserva() {
-  const [servicios, setServicios] = useState<ServicioOpcion[]>(serviciosLocales)
-  const [barberos, setBarberos] = useState<Opcion[]>(barberosLocales)
+  const [servicios, setServicios] = useState<ServicioOpcion[]>([])
+  const [barberos, setBarberos] = useState<Opcion[]>([])
 
-  const [servicioId, setServicioId] = useState<number | null>(serviciosLocales[0]?.id ?? 1)
-  const [barberoId, setBarberoId] = useState<number | null>(barberosLocales[0]?.id ?? 1)
+  const [servicioId, setServicioId] = useState<number | null>(null)
+  const [barberoId, setBarberoId] = useState<number | null>(null)
   const [fecha, setFecha] = useState(hoy())
   const [hora, setHora] = useState('')
   const [nombre, setNombre] = useState('')
@@ -67,6 +61,7 @@ export default function Reserva() {
       if (id) {
         setServicioId(id)
         setHora('')
+        setConfirmada(null)
       }
     }
     const onSeleccionarBarbero = (e: Event) => {
@@ -74,6 +69,7 @@ export default function Reserva() {
       if (id) {
         setBarberoId(id)
         setHora('')
+        setConfirmada(null)
       }
     }
 
@@ -85,50 +81,59 @@ export default function Reserva() {
     }
   }, [])
 
-  // 2. Traer servicios y barberos desde Supabase si está disponible
+  // 2. Traer servicios y barberos desde Supabase como flujo principal
   useEffect(() => {
     if (!supabase) return
+
     supabase
       .from('servicios')
       .select('id, nombre, precio, duracionMin:duracion_min')
       .order('id')
-      .then(({ data }) => {
+      .then(({ data, error: err }) => {
+        if (err) {
+          setError('No pudimos cargar los servicios disponibles.')
+          return
+        }
         if (data && data.length > 0) {
           setServicios(data)
-          setServicioId((prev) => prev ?? data[0].id)
+          setServicioId((prev) => (prev && data.some((s) => s.id === prev) ? prev : data[0].id))
         }
       })
+
     supabase
       .from('barberos')
       .select('id, nombre')
       .order('id')
-      .then(({ data }) => {
+      .then(({ data, error: err }) => {
+        if (err) {
+          setError('No pudimos cargar los barberos disponibles.')
+          return
+        }
         if (data && data.length > 0) {
           setBarberos(data)
-          setBarberoId((prev) => prev ?? data[0].id)
+          setBarberoId((prev) => (prev && data.some((b) => b.id === prev) ? prev : data[0].id))
         }
       })
   }, [])
 
-  // 3. Obtener horas libres
+  // 3. Obtener horas libres desde Supabase
   const clave = servicioId && barberoId && fecha ? `${servicioId}-${barberoId}-${fecha}` : ''
   const cargandoHoras = supabase !== null && clave !== '' && horasCargadas.clave !== clave
-  const horas =
-    supabase !== null
-      ? horasCargadas.clave === clave
-        ? horasCargadas.horas
-        : []
-      : horasFallback
+  const horas = horasCargadas.clave === clave ? horasCargadas.horas : []
 
   useEffect(() => {
     if (!supabase || !clave) return
     let vigente = true
     supabase
       .rpc('horas_disponibles', { p_barbero: barberoId, p_servicio: servicioId, p_fecha: fecha })
-      .then(({ data, error }) => {
+      .then(({ data, error: err }) => {
         if (!vigente) return
-        if (error) setError('No pudimos cargar las horas disponibles. Intenta de nuevo.')
-        const lista = error ? [] : (data as { hora: string }[]).map((h) => h.hora.slice(0, 5))
+        if (err) {
+          setError('No pudimos cargar las horas disponibles. Intenta de nuevo.')
+          setHorasCargadas({ clave, horas: [] })
+          return
+        }
+        const lista = (data as { hora: string }[]).map((h) => h.hora.slice(0, 5))
         setHorasCargadas({ clave, horas: lista })
       })
     return () => {
@@ -143,6 +148,8 @@ export default function Reserva() {
   // 4. Enviar la reserva
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!supabase) return
+
     if (!servicioId || !barberoId || !hora) {
       setError('Por favor selecciona servicio, barbero, fecha y hora.')
       return
@@ -151,42 +158,26 @@ export default function Reserva() {
     setEnviando(true)
     setError('')
 
-    if (supabase) {
-      const { error } = await supabase.rpc('crear_reserva', {
-        p_barbero: barberoId,
-        p_servicio: servicioId,
-        p_fecha: fecha,
-        p_hora: hora,
-        p_nombre: nombre,
-        p_telefono: telefono,
-      })
-      setEnviando(false)
+    const { error: rpcError } = await supabase.rpc('crear_reserva', {
+      p_barbero: barberoId,
+      p_servicio: servicioId,
+      p_fecha: fecha,
+      p_hora: hora,
+      p_nombre: nombre,
+      p_telefono: telefono,
+    })
+    setEnviando(false)
 
-      if (error) {
-        if (error.message.includes('HORA_NO_DISPONIBLE')) {
-          setError('Esa hora se acaba de ocupar. Por favor elige otra.')
-          setHora('')
-          setHorasCargadas({ clave: '', horas: [] })
-          setRecarga((n) => n + 1)
-        } else {
-          setError('No pudimos guardar la reserva. Revisa tus datos e intenta de nuevo.')
-        }
-        return
+    if (rpcError) {
+      if (rpcError.message.includes('HORA_NO_DISPONIBLE')) {
+        setError('Esa hora ya fue tomada. Por favor elige otra.')
+        setHora('')
+        setHorasCargadas({ clave: '', horas: [] })
+        setRecarga((n) => n + 1)
+      } else {
+        setError('No pudimos guardar la reserva. Revisa tus datos e intenta de nuevo.')
       }
-    } else {
-      // Si no hay Supabase configurado, completamos vía WhatsApp directo
-      const textoWA = encodeURIComponent(
-        `Hola ${negocio.nombre}, quiero confirmar una hora:\n\n` +
-          `💈 Servicio: ${servicioActual?.nombre} ($${servicioActual?.precio.toLocaleString('es-CL')})\n` +
-          `👤 Barbero: ${barberoActual?.nombre}\n` +
-          `📅 Fecha: ${formatearFecha(fecha)}\n` +
-          `⏰ Hora: ${hora}\n` +
-          `🙋‍♂️ Cliente: ${nombre}\n` +
-          `📱 Contacto: ${telefono}\n\n` +
-          `¿Me confirman la disponibilidad? Muchas gracias.`
-      )
-      window.open(`https://wa.me/${negocio.telefono}?text=${textoWA}`, '_blank')
-      setEnviando(false)
+      return
     }
 
     setConfirmada({
@@ -197,11 +188,14 @@ export default function Reserva() {
       nombre,
       telefono,
     })
+
+    setHora('')
+    setHorasCargadas({ clave: '', horas: [] })
+    setRecarga((n) => n + 1)
   }
 
   function nuevaReserva() {
     setConfirmada(null)
-    setFecha(hoy())
     setHora('')
     setNombre('')
     setTelefono('')
@@ -223,8 +217,32 @@ export default function Reserva() {
           </p>
         </div>
 
-        {/* Pantalla de Reserva Confirmada (Comprobante / Ticket) */}
-        {confirmada ? (
+        {/* Si Supabase no está configurado, reemplaza el formulario con contacto a WhatsApp */}
+        {!supabase ? (
+          <div className="mx-auto mt-12 max-w-xl rounded-3xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur-xl shadow-xl">
+            <h3 className="font-titulo text-2xl uppercase tracking-wider text-[#f5f2ec] md:text-3xl">
+              Agenda tu cita por WhatsApp
+            </h3>
+            <p className="mx-auto mt-3 max-w-md text-sm text-stone-300">
+              Contáctanos directamente por WhatsApp para consultar disponibilidad y coordinar tu hora.
+            </p>
+            <div className="mt-8 flex flex-col items-center gap-3">
+              <a
+                href={`https://wa.me/${negocio.telefono}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2.5 rounded-full bg-rojo px-8 py-4 font-semibold text-[#f5f2ec] shadow-lg shadow-black/40 transition-all hover:bg-rojo/85 hover:shadow-xl hover:shadow-black/60 active:scale-95"
+              >
+                <span>Contactar por WhatsApp ({negocio.telefono})</span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </a>
+              <span className="text-xs text-stone-400">+{negocio.telefono}</span>
+            </div>
+          </div>
+        ) : confirmada ? (
+          /* Pantalla de Reserva Confirmada (Comprobante / Ticket) */
           <div
             role="status"
             className="mx-auto mt-12 max-w-xl overflow-hidden rounded-3xl border border-white/10 bg-[#f7f4ee] p-8 text-azul shadow-2xl"
@@ -236,7 +254,9 @@ export default function Reserva() {
                 </svg>
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Reserva recibida</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                  Reserva recibida · Pendiente de confirmación
+                </p>
                 <h3 className="font-titulo text-2xl uppercase md:text-3xl">¡Hora solicitada con éxito!</h3>
               </div>
             </div>
@@ -284,42 +304,48 @@ export default function Reserva() {
                   <span>Selecciona el servicio</span>
                 </label>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {servicios.map((s) => {
-                    const seleccionado = s.id === servicioId
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setServicioId(s.id)
-                          setHora('')
-                        }}
-                        className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all ${
-                          seleccionado
-                            ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
-                            : 'border-white/10 bg-white/5 text-stone-200 hover:border-white/20 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="font-titulo text-lg uppercase">{s.nombre}</span>
-                          <span
-                            className={`font-titulo text-lg font-bold ${
-                              seleccionado ? 'text-rojo' : 'text-azul-claro'
-                            }`}
-                          >
-                            ${s.precio.toLocaleString('es-CL')}
-                          </span>
-                        </div>
-                        <span
-                          className={`mt-2 text-xs font-medium ${
-                            seleccionado ? 'text-azul/70' : 'text-stone-400'
+                  {servicios.length === 0 ? (
+                    <p className="col-span-2 text-sm text-stone-400 animate-pulse">
+                      Cargando servicios…
+                    </p>
+                  ) : (
+                    servicios.map((s) => {
+                      const seleccionado = s.id === servicioId
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setServicioId(s.id)
+                            setHora('')
+                          }}
+                          className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all ${
+                            seleccionado
+                              ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
+                              : 'border-white/10 bg-white/5 text-stone-200 hover:border-white/20 hover:bg-white/10'
                           }`}
                         >
-                          ⏱ {s.duracionMin} minutos
-                        </span>
-                      </button>
-                    )
-                  })}
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-titulo text-lg uppercase">{s.nombre}</span>
+                            <span
+                              className={`font-titulo text-lg font-bold ${
+                                seleccionado ? 'text-rojo' : 'text-azul-claro'
+                              }`}
+                            >
+                              ${s.precio.toLocaleString('es-CL')}
+                            </span>
+                          </div>
+                          <span
+                            className={`mt-2 text-xs font-medium ${
+                              seleccionado ? 'text-azul/70' : 'text-stone-400'
+                            }`}
+                          >
+                            ⏱ {s.duracionMin} minutos
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
                 </div>
               </div>
 
@@ -330,35 +356,41 @@ export default function Reserva() {
                   <span>Elige a tu barbero</span>
                 </label>
                 <div className="mt-3 grid grid-cols-3 gap-3">
-                  {barberos.map((b) => {
-                    const seleccionado = b.id === barberoId
-                    return (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => {
-                          setBarberoId(b.id)
-                          setHora('')
-                        }}
-                        className={`flex flex-col items-center rounded-xl border p-3.5 text-center transition-all ${
-                          seleccionado
-                            ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
-                            : 'border-white/10 bg-white/5 text-stone-200 hover:border-white/20 hover:bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold uppercase ${
-                            seleccionado ? 'bg-rojo text-white' : 'bg-white/10 text-stone-300'
+                  {barberos.length === 0 ? (
+                    <p className="col-span-3 text-sm text-stone-400 animate-pulse">
+                      Cargando barberos…
+                    </p>
+                  ) : (
+                    barberos.map((b) => {
+                      const seleccionado = b.id === barberoId
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => {
+                            setBarberoId(b.id)
+                            setHora('')
+                          }}
+                          className={`flex flex-col items-center rounded-xl border p-3.5 text-center transition-all ${
+                            seleccionado
+                              ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
+                              : 'border-white/10 bg-white/5 text-stone-200 hover:border-white/20 hover:bg-white/10'
                           }`}
                         >
-                          {b.nombre.slice(0, 2)}
-                        </div>
-                        <span className="mt-2 font-titulo text-sm uppercase tracking-wide">
-                          {b.nombre}
-                        </span>
-                      </button>
-                    )
-                  })}
+                          <div
+                            className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold uppercase ${
+                              seleccionado ? 'bg-rojo text-white' : 'bg-white/10 text-stone-300'
+                            }`}
+                          >
+                            {b.nombre.slice(0, 2)}
+                          </div>
+                          <span className="mt-2 font-titulo text-sm uppercase tracking-wide">
+                            {b.nombre}
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
                 </div>
               </div>
 
