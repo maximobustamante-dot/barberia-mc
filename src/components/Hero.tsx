@@ -1,23 +1,9 @@
 import { useState } from 'react'
-
-function calcularEstadoAbierto(): boolean {
-  const ahora = new Date()
-  const dia = ahora.getDay()
-  const minutos = ahora.getHours() * 60 + ahora.getMinutes()
-  // Lunes a viernes: 10:00 (600) a 20:00 (1200)
-  // Sábado: 10:00 (600) a 18:00 (1080)
-  // Domingo: cerrado
-  if (dia >= 1 && dia <= 5) {
-    return minutos >= 600 && minutos < 1200
-  }
-  if (dia === 6) {
-    return minutos >= 600 && minutos < 1080
-  }
-  return false
-}
+import { negocio } from '../data/negocio'
+import { estadoHorario } from '../lib/horario'
 
 export default function Hero() {
-  const [abierto] = useState(calcularEstadoAbierto)
+  const [estado] = useState(() => estadoHorario())
 
   return (
     <section
@@ -41,10 +27,10 @@ export default function Hero() {
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1 text-xs font-semibold tracking-wide uppercase text-stone-300 shadow-sm backdrop-blur-md">
             <span
               className={`h-2 w-2 rounded-full ${
-                abierto ? 'bg-emerald-500' : 'bg-amber-600'
+                estado.abierto ? 'bg-emerald-500' : 'bg-amber-600'
               }`}
             />
-            {abierto ? 'Abierto hoy' : 'Cerrado ahora · Agenda tu hora'}
+            {estado.texto}
           </span>
         </div>
 
@@ -84,6 +70,17 @@ export default function Hero() {
             Ver servicios y precios
           </a>
         </div>
+
+        <a
+          href="#ubicacion"
+          className="mt-5 inline-flex items-center gap-1.5 text-sm text-stone-300 underline-offset-4 hover:text-white hover:underline"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          {negocio.direccion}, {negocio.comuna}
+        </a>
 
         {/* Puntos de valor / Confianza con brillo atenuado */}
         <div className="mt-12 flex flex-wrap items-center justify-center gap-6 border-t border-white/10 pt-6 text-xs text-stone-400 uppercase tracking-widest sm:text-sm">

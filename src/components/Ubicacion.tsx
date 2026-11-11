@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { negocio } from '../data/negocio'
+import { estadoHorario } from '../lib/horario'
 
 const amenities = [
   {
@@ -40,29 +41,9 @@ const amenities = [
   },
 ]
 
-function calcularEstadoHorario() {
-  const ahora = new Date()
-  const dia = ahora.getDay()
-  const minutos = ahora.getHours() * 60 + ahora.getMinutes()
-
-  if (dia >= 1 && dia <= 5) {
-    if (minutos >= 600 && minutos < 1200) {
-      return { abierto: true, texto: 'Abierto ahora · Cierra a las 20:00' }
-    }
-    return { abierto: false, texto: 'Cerrado ahora · Abre a las 10:00' }
-  }
-  if (dia === 6) {
-    if (minutos >= 600 && minutos < 1080) {
-      return { abierto: true, texto: 'Abierto ahora · Cierra a las 18:00' }
-    }
-    return { abierto: false, texto: 'Cerrado ahora · Abre a las 10:00' }
-  }
-  return { abierto: false, texto: 'Cerrado hoy domingo · Abre lunes a las 10:00' }
-}
-
 export default function Ubicacion() {
   const busqueda = encodeURIComponent(`${negocio.direccion}, ${negocio.comuna}`)
-  const [estadoHorario] = useState(calcularEstadoHorario)
+  const [horario] = useState(() => estadoHorario())
 
   return (
     <section id="ubicacion" className="scroll-mt-24 bg-azul-claro px-6 py-24 text-azul">
@@ -76,11 +57,11 @@ export default function Ubicacion() {
             <div className="mt-6 inline-flex items-center gap-2.5 rounded-full border border-azul/15 bg-white/80 px-4 py-1.5 shadow-sm">
               <span
                 className={`h-2.5 w-2.5 rounded-full ${
-                  estadoHorario.abierto ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                  horario.abierto ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
                 }`}
               />
               <span className="text-xs font-bold uppercase tracking-wider text-azul">
-                {estadoHorario.texto}
+                {horario.texto}
               </span>
             </div>
 
@@ -142,7 +123,7 @@ export default function Ubicacion() {
 
         {/* Comodidades / Amenities */}
         <div className="mt-14 border-t border-azul/10 pt-10">
-          <p className="text-center text-xs font-bold uppercase tracking-[0.2em] text-azul/60">
+          <p className="text-center text-xs font-bold uppercase tracking-[0.2em] text-azul/75">
             Comodidades del local
           </p>
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -157,7 +138,7 @@ export default function Ubicacion() {
                 <h4 className="mt-2.5 text-xs font-bold uppercase tracking-wider text-azul">
                   {a.titulo}
                 </h4>
-                <p className="mt-1 text-[11px] text-azul/65">{a.desc}</p>
+                <p className="mt-1 text-xs text-azul/75">{a.desc}</p>
               </div>
             ))}
           </div>

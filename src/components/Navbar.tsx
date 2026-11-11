@@ -105,7 +105,6 @@ export default function Navbar() {
                 className="inline-flex items-center gap-2 rounded-full bg-rojo px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-black/30 transition-all hover:bg-rojo/85 hover:shadow-lg hover:shadow-black/50 active:scale-95"
               >
                 <span>Reservar</span>
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#ded9cf]" />
               </a>
             </li>
           </ul>

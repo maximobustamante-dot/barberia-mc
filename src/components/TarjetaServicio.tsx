@@ -5,8 +5,7 @@ interface Props {
 }
 
 export default function TarjetaServicio({ servicio }: Props) {
-  const esDestacado = servicio.id === 4 // Corte + Barba
-  const esPopular = servicio.id === 2 // Fade
+  const esDestacado = servicio.destacado === true
 
   const seleccionar = () => {
     window.dispatchEvent(
@@ -27,12 +26,7 @@ export default function TarjetaServicio({ servicio }: Props) {
       {/* Badge decorativo superior */}
       {esDestacado && (
         <span className="absolute -top-3 right-6 rounded-full bg-rojo px-3 py-0.5 text-xs font-bold uppercase tracking-wider text-white shadow-sm">
-          ⭐ Más pedido
-        </span>
-      )}
-      {esPopular && (
-        <span className="absolute -top-3 right-6 rounded-full bg-azul px-3 py-0.5 text-xs font-bold uppercase tracking-wider text-white shadow-sm">
-          🔥 Popular
+          Más pedido
         </span>
       )}
 
@@ -64,7 +58,7 @@ export default function TarjetaServicio({ servicio }: Props) {
           onClick={seleccionar}
           className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-azul transition-colors hover:text-rojo group-hover:translate-x-0.5"
         >
-          <span>Elegir servicio</span>
+          <span>Reservar este</span>
           <span>→</span>
         </button>
       </div>

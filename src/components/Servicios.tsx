@@ -34,8 +34,8 @@ export default function Servicios() {
             </p>
           </div>
 
-          {/* Filtros por categoría */}
-          <div className="flex flex-wrap gap-2">
+          {/* Filtros por categoría (solo en pantallas medianas y grandes) */}
+          <div className="hidden flex-wrap gap-2 sm:flex">
             {filtros.map((f) => (
               <button
                 key={f.id}
@@ -58,21 +58,6 @@ export default function Servicios() {
             <TarjetaServicio key={s.id} servicio={s} />
           ))}
         </ul>
-
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 rounded-2xl border border-azul/10 bg-white/70 p-6 sm:flex-row sm:px-8">
-          <div>
-            <p className="font-titulo text-xl uppercase text-azul">¿No encuentras lo que buscas?</p>
-            <p className="text-sm text-azul/70">
-              Ofrecemos servicios combinados y asesoría presencial en cada visita.
-            </p>
-          </div>
-          <a
-            href="#reserva"
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-rojo px-8 py-3 text-sm font-semibold uppercase tracking-wider text-white shadow-md shadow-rojo/25 transition-all hover:bg-rojo/90 hover:shadow-lg hover:shadow-rojo/40 active:scale-95"
-          >
-            <span>Reservar ahora</span>
-          </a>
-        </div>
       </div>
     </section>
   )

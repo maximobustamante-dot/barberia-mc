@@ -21,3 +21,9 @@
   outline: 2px solid var(--color-rojo);
   outline-offset: 3px;
 }
+
+/* Sobre fondos oscuros el rojo casi no se ve: ahí el contorno es claro */
+.bg-azul :focus-visible,
+#inicio :focus-visible {
+  outline-color: var(--color-azul-claro);
+}

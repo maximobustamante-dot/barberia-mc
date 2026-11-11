@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { negocio } from '../data/negocio'
 
@@ -24,6 +25,15 @@ interface Confirmada {
 // Fecha de hoy en formato yyyy-mm-dd según la hora del computador
 function hoy() {
   const d = new Date()
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mes}-${dia}`
+}
+
+// Fecha de hoy + n días (hasta dónde se puede reservar)
+function enDias(n: number) {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
   const mes = String(d.getMonth() + 1).padStart(2, '0')
   const dia = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${mes}-${dia}`
@@ -174,6 +184,12 @@ export default function Reserva() {
         setHora('')
         setHorasCargadas({ clave: '', horas: [] })
         setRecarga((n) => n + 1)
+      } else if (rpcError.message.includes('FECHA_FUERA_DE_RANGO')) {
+        setError('Solo se puede reservar hasta 30 días hacia adelante.')
+      } else if (rpcError.message.includes('DEMASIADAS_RESERVAS')) {
+        setError('Estamos recibiendo muchas reservas. Intenta en unos minutos o escríbenos por WhatsApp.')
+      } else if (rpcError.message.includes('LIMITE_RESERVAS')) {
+        setError('Ya tienes 2 horas reservadas con este teléfono. Escríbenos por WhatsApp si necesitas otra.')
       } else {
         setError('No pudimos guardar la reserva. Revisa tus datos e intenta de nuevo.')
       }
@@ -210,10 +226,10 @@ export default function Reserva() {
             Sistema de reservas
           </p>
           <h2 className="mt-2 font-titulo text-4xl uppercase md:text-5xl">
-            Agenda tu cita en segundos
+            Reserva tu hora en segundos
           </h2>
           <p className="mt-3 max-w-2xl text-sm text-white/80 sm:text-base">
-            Elige el servicio, tu barbero favorito y el horario que mejor te acomode. Confirmamos de inmediato.
+            Elige el servicio, tu barbero favorito y el horario que mejor te acomode. Tu hora queda apartada al instante y te confirmamos por WhatsApp.
           </p>
         </div>
 
@@ -221,7 +237,7 @@ export default function Reserva() {
         {!supabase ? (
           <div className="mx-auto mt-12 max-w-xl rounded-3xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur-xl shadow-xl">
             <h3 className="font-titulo text-2xl uppercase tracking-wider text-[#f5f2ec] md:text-3xl">
-              Agenda tu cita por WhatsApp
+              Reserva tu hora por WhatsApp
             </h3>
             <p className="mx-auto mt-3 max-w-md text-sm text-stone-300">
               Contáctanos directamente por WhatsApp para consultar disponibilidad y coordinar tu hora.
@@ -283,7 +299,7 @@ export default function Reserva() {
             </div>
 
             <p className="mt-5 text-sm text-azul/75">
-              Te contactaremos vía WhatsApp al número registrado para recordar tu cita. Si necesitas reprogramar, avísanos con al menos 2 horas de anticipación.
+              Te escribiremos por WhatsApp para confirmar tu hora. Si necesitas cambiarla, avísanos con al menos 2 horas de anticipación.
             </p>
 
             <button
@@ -298,12 +314,12 @@ export default function Reserva() {
           <form onSubmit={enviar} className="mt-12 grid gap-10 lg:grid-cols-[1.5fr_1fr]">
             <div className="space-y-8">
               {/* PASO 1: Selección de Servicio */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">1</span>
+              <fieldset>
+                <legend className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-xs text-white">1</span>
                   <span>Selecciona el servicio</span>
-                </label>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                </legend>
+                <div className="mt-3 grid grid-cols-2 gap-3">
                   {servicios.length === 0 ? (
                     <p className="col-span-2 text-sm text-stone-400 animate-pulse">
                       Cargando servicios…
@@ -315,18 +331,19 @@ export default function Reserva() {
                         <button
                           key={s.id}
                           type="button"
+                          aria-pressed={seleccionado}
                           onClick={() => {
                             setServicioId(s.id)
                             setHora('')
                           }}
-                          className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all ${
+                          className={`flex flex-col justify-between rounded-xl border p-3 text-left transition-all sm:p-4 ${
                             seleccionado
                               ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
                               : 'border-white/10 bg-white/5 text-stone-200 hover:border-white/20 hover:bg-white/10'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="font-titulo text-lg uppercase">{s.nombre}</span>
+                          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+                            <span className="font-titulo text-base uppercase leading-tight sm:text-lg">{s.nombre}</span>
                             <span
                               className={`font-titulo text-lg font-bold ${
                                 seleccionado ? 'text-rojo' : 'text-azul-claro'
@@ -336,25 +353,28 @@ export default function Reserva() {
                             </span>
                           </div>
                           <span
-                            className={`mt-2 text-xs font-medium ${
-                              seleccionado ? 'text-azul/70' : 'text-stone-400'
+                            className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${
+                              seleccionado ? 'text-azul/75' : 'text-stone-300'
                             }`}
                           >
-                            ⏱ {s.duracionMin} minutos
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {s.duracionMin} min
                           </span>
                         </button>
                       )
                     })
                   )}
                 </div>
-              </div>
+              </fieldset>
 
               {/* PASO 2: Selección de Barbero */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">2</span>
+              <fieldset>
+                <legend className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-xs text-white">2</span>
                   <span>Elige a tu barbero</span>
-                </label>
+                </legend>
                 <div className="mt-3 grid grid-cols-3 gap-3">
                   {barberos.length === 0 ? (
                     <p className="col-span-3 text-sm text-stone-400 animate-pulse">
@@ -367,6 +387,7 @@ export default function Reserva() {
                         <button
                           key={b.id}
                           type="button"
+                          aria-pressed={seleccionado}
                           onClick={() => {
                             setBarberoId(b.id)
                             setHora('')
@@ -392,21 +413,23 @@ export default function Reserva() {
                     })
                   )}
                 </div>
-              </div>
+              </fieldset>
 
               {/* PASO 3: Fecha y Horas Disponibles */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">3</span>
+              <fieldset>
+                <legend className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-xs text-white">3</span>
                   <span>Fecha y horario</span>
-                </label>
+                </legend>
 
                 <div className="mt-3">
                   <input
                     id="fecha"
+                    aria-label="Fecha de la reserva"
                     type="date"
                     required
                     min={hoy()}
+                    max={enDias(30)}
                     value={fecha}
                     onChange={(e) => {
                       setFecha(e.target.value)
@@ -431,15 +454,16 @@ export default function Reserva() {
                         No hay horas libres para esta fecha o barbero. Elige otro día.
                       </p>
                     ) : (
-                      <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
+                      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5 md:grid-cols-6">
                         {horas.map((h) => {
                           const seleccionada = hora === h
                           return (
                             <button
                               key={h}
                               type="button"
+                              aria-pressed={seleccionada}
                               onClick={() => setHora(h)}
-                              className={`rounded-xl border py-2.5 text-center text-xs font-bold transition-all ${
+                              className={`h-11 rounded-xl border text-center text-sm font-bold transition-all ${
                                 seleccionada
                                   ? 'border-rojo bg-rojo text-[#f7f4ee] shadow-md shadow-black/30 scale-105'
                                   : 'border-white/15 bg-white/5 text-stone-300 hover:border-white/30 hover:bg-white/10'
@@ -453,14 +477,14 @@ export default function Reserva() {
                     )}
                   </div>
                 )}
-              </div>
+              </fieldset>
 
               {/* PASO 4: Datos del cliente */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-[11px] text-white">4</span>
+              <fieldset>
+                <legend className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-azul-claro">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rojo text-xs text-white">4</span>
                   <span>Tus datos de contacto</span>
-                </label>
+                </legend>
 
                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
                   <div>
@@ -496,14 +520,14 @@ export default function Reserva() {
                     />
                   </div>
                 </div>
-              </div>
+              </fieldset>
             </div>
 
             {/* Columna Derecha: Tarjeta Resumen Dinámica de la Reserva */}
             <div>
               <div className="sticky top-28 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl">
                 <h3 className="font-titulo text-2xl uppercase tracking-wider text-[#f5f2ec]">
-                  Resumen de tu cita
+                  Resumen de tu hora
                 </h3>
                 <p className="mt-1 text-xs text-stone-400">
                   Verifica los detalles antes de confirmar
@@ -546,7 +570,9 @@ export default function Reserva() {
                   </div>
 
                   <div className="flex items-baseline justify-between border-t border-white/10 pt-4">
-                    <span className="font-titulo text-lg uppercase text-stone-200">Total a pagar:</span>
+                    <span className="font-titulo text-lg uppercase text-stone-200">
+                      Total <span className="font-sans text-xs normal-case text-stone-300">(pagas en el local)</span>
+                    </span>
                     <span className="font-titulo text-3xl font-bold text-azul-claro">
                       ${servicioActual?.precio.toLocaleString('es-CL') ?? '0'}
                     </span>
@@ -573,8 +599,14 @@ export default function Reserva() {
                   )}
                 </button>
 
-                <p className="mt-3 text-center text-[11px] text-stone-400">
+                <p className="mt-3 text-center text-xs text-stone-300">
                   Sin pagos por adelantado · Pagas en el local al terminar
+                </p>
+                <p className="mt-2 text-center text-xs text-stone-300">
+                  Usamos tu nombre y teléfono solo para gestionar tu hora.{' '}
+                  <Link to="/privacidad" className="underline hover:text-stone-200">
+                    Privacidad
+                  </Link>
                 </p>
               </div>
             </div>

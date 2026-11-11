@@ -30,7 +30,7 @@ export default function Nosotros() {
             {valores.map((v) => (
               <div key={v.titulo} className="rounded-xl border border-azul/10 bg-white/70 p-4 shadow-sm">
                 <p className="font-titulo text-sm uppercase text-azul">{v.titulo}</p>
-                <p className="mt-1 text-xs text-azul/65">{v.desc}</p>
+                <p className="mt-1 text-sm text-azul/75">{v.desc}</p>
               </div>
             ))}
           </div>
@@ -44,28 +44,17 @@ export default function Nosotros() {
                 src={foto}
                 alt={`Interior de ${negocio.nombre}`}
                 onError={() => setImgError(true)}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover text-transparent"
                 loading="lazy"
               />
             ) : (
               <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-azul to-azul/90 p-8 text-center text-white">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-2xl">
-                  💈
-                </div>
-                <p className="mt-4 font-titulo text-2xl uppercase tracking-wider">Tradición y Oficio</p>
-                <p className="mt-2 max-w-xs text-xs text-white/70">
+                <p className="font-titulo text-2xl uppercase tracking-wider">Tradición y oficio</p>
+                <p className="mt-2 max-w-xs text-sm text-white/75">
                   Espacio diseñado para tu comodidad y el cuidado de tu imagen personal.
                 </p>
               </div>
             )}
-          </div>
-
-          {/* Badge flotante superpuesto */}
-          <div className="absolute -bottom-5 -left-4 rounded-2xl border border-white/20 bg-rojo px-5 py-3 text-white shadow-xl">
-            <p className="font-titulo text-2xl font-bold leading-none">100%</p>
-            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90">
-              Oficio artesanal
-            </p>
           </div>
         </div>
       </div>
