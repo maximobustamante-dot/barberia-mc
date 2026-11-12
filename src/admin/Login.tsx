@@ -83,9 +83,15 @@ export default function Login() {
           </button>
         </form>
 
-        <Link to="/" className="mt-6 block text-center text-sm text-white/70 hover:text-white">
-          ← Volver a la página
-        </Link>
+        <div className="mt-6 flex flex-wrap justify-between gap-3 text-sm">
+          <Link to="/" className="text-white/70 hover:text-white">
+            ← Volver a la página
+          </Link>
+          {/* Para el portafolio: el panel con datos inventados, sin contraseña */}
+          <Link to="/admin/demo" className="font-semibold text-white/70 hover:text-white">
+            Ver demo del panel →
+          </Link>
+        </div>
       </div>
     </main>
   )

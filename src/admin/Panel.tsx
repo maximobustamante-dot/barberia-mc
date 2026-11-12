@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { supabase } from '../lib/supabase'
 import { negocio } from '../data/negocio'
 import { barberos } from '../data/barberos'
 import TarjetaReserva from './TarjetaReserva'
+import type { FuenteReservas } from './fuente'
 import {
   diaDe,
   fechaLarga,
   hoyChile,
   lunesDe,
-  mensajeError,
   pesos,
   sumarDias,
   type Estado,
@@ -18,7 +17,13 @@ import {
 
 type Vista = 'dia' | 'semana'
 
-export default function Panel({ email }: { email: string }) {
+interface Props {
+  email: string
+  fuente: FuenteReservas // Supabase en el panel real, datos inventados en la demo
+  demo?: boolean
+}
+
+export default function Panel({ email, fuente, demo = false }: Props) {
   const [vista, setVista] = useState<Vista>('dia')
   const [fecha, setFecha] = useState(hoyChile)
   const [barbero, setBarbero] = useState<number | 'todos'>('todos')
@@ -37,20 +42,14 @@ export default function Panel({ email }: { email: string }) {
 
   // 1. Pedir las reservas del rango a la base de datos
   useEffect(() => {
-    if (!supabase) return
-    let vigente = true
-    supabase.rpc('admin_reservas', { p_desde: desde, p_hasta: hasta }).then(({ data, error }) => {
-      if (!vigente) return
-      setCargadas(
-        error
-          ? { clave, filas: [], error: mensajeError(error.message) }
-          : { clave, filas: (data ?? []) as ReservaAdmin[], error: '' },
-      )
+    let vigente = true // si cambia la fecha antes de que llegue la respuesta, se ignora
+    fuente.cargar(desde, hasta).then(({ filas, error }) => {
+      if (vigente) setCargadas({ clave, filas, error })
     })
     return () => {
       vigente = false
     }
-  }, [clave, desde, hasta])
+  }, [clave, desde, hasta, fuente])
 
   // 2. Actualizar solo: al volver a la pestaña y cada 2 minutos
   useEffect(() => {
@@ -65,12 +64,11 @@ export default function Panel({ email }: { email: string }) {
 
   // 3. Cambiar el estado de una reserva
   async function cambiar(id: string, estado: Estado) {
-    if (!supabase) return
     setOcupada(id)
     setAviso('')
-    const { error } = await supabase.rpc('admin_cambiar_estado', { p_reserva: id, p_estado: estado })
+    const error = await fuente.cambiar(id, estado)
     setOcupada(null)
-    if (error) setAviso(mensajeError(error.message))
+    setAviso(error)
     setRecarga((n) => n + 1)
   }
 
@@ -110,13 +108,18 @@ export default function Panel({ email }: { email: string }) {
             </Link>
             <button
               type="button"
-              onClick={() => supabase?.auth.signOut()}
+              onClick={() => fuente.salir()}
               className="rounded-lg border border-white/20 px-3 py-1.5 font-semibold hover:bg-white/10"
             >
-              Cerrar sesión
+              {demo ? 'Salir de la demo' : 'Cerrar sesión'}
             </button>
           </div>
         </div>
+        {demo && (
+          <p className="bg-rojo px-6 py-2 text-center text-xs font-semibold text-white sm:text-sm">
+            Modo demo: los clientes y reservas son inventados y los cambios se borran al recargar.
+          </p>
+        )}
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">

@@ -45,6 +45,24 @@ export const horaDe = (instante: string) => formatoHora.format(new Date(instante
 // '2026-11-16' → 'lunes 16 de noviembre'
 export const fechaLarga = (dia: string) => formatoLargo.format(new Date(`${dia}T12:00:00Z`))
 
+// '2026-11-16' + '10:30' en hora de Chile → instante ISO en UTC ('2026-11-16T13:30:00.000Z').
+// Chile cambia entre UTC-3 y UTC-4 según la época del año; Intl sabe cuál corresponde.
+const formatoPartes = new Intl.DateTimeFormat('en-US', {
+  timeZone: ZONA,
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+export function instanteChile(dia: string, hora: string) {
+  const supuesto = new Date(`${dia}T${hora}:00Z`).getTime()
+  const p = Object.fromEntries(formatoPartes.formatToParts(supuesto).map((x) => [x.type, x.value]))
+  const relojChile = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute)
+  return new Date(supuesto - (relojChile - supuesto)).toISOString()
+}
+
 // Suma (o resta) días a una fecha yyyy-mm-dd
 export function sumarDias(dia: string, n: number) {
   const d = new Date(`${dia}T12:00:00Z`)

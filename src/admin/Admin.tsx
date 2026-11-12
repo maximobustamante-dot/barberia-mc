@@ -5,6 +5,10 @@ import { supabase } from '../lib/supabase'
 import { negocio } from '../data/negocio'
 import Login from './Login'
 import Panel from './Panel'
+import { fuenteSupabase } from './fuente'
+
+// Se crea una sola vez: el panel real lee y cambia reservas a través de Supabase
+const fuente = supabase ? fuenteSupabase(supabase) : null
 
 // En qué pantalla está el panel
 type Paso =
@@ -57,6 +61,12 @@ export default function Admin() {
       {!supabase ? (
         <Aviso titulo="Panel no disponible">
           Falta configurar Supabase en <code>.env.local</code>.
+          <Link
+            to="/admin/demo"
+            className="mt-6 block w-full rounded-xl bg-azul py-3 text-center text-sm font-bold uppercase tracking-wider text-white"
+          >
+            Ver demo del panel
+          </Link>
         </Aviso>
       ) : paso.tipo === 'cargando' ? (
         <div className="grid min-h-screen place-items-center bg-hueso text-azul/60">Cargando…</div>
@@ -88,7 +98,7 @@ export default function Admin() {
           </button>
         </Aviso>
       ) : (
-        <Panel email={paso.email} />
+        fuente && <Panel email={paso.email} fuente={fuente} />
       )}
     </>
   )

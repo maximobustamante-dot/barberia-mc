@@ -7,6 +7,8 @@ import NoEncontrada from './paginas/NoEncontrada.tsx'
 // El panel se descarga solo cuando alguien entra a /admin,
 // así los clientes no cargan código que no usan.
 const Admin = lazy(() => import('./admin/Admin.tsx'))
+const Demo = lazy(() => import('./admin/Demo.tsx'))
+const cargando = <div className="grid min-h-screen place-items-center">Cargando…</div>
 
 // Qué componente se muestra según la dirección (URL)
 export default function Rutas() {
@@ -17,8 +19,16 @@ export default function Rutas() {
       <Route
         path="/admin"
         element={
-          <Suspense fallback={<div className="grid min-h-screen place-items-center">Cargando…</div>}>
+          <Suspense fallback={cargando}>
             <Admin />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/admin/demo"
+        element={
+          <Suspense fallback={cargando}>
+            <Demo />
           </Suspense>
         }
       />
