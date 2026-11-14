@@ -67,7 +67,10 @@ begin
       $q$select count(*) = 2 from pg_proc p where p.pronamespace = 'public'::regnamespace
          and has_function_privilege('anon', p.oid, 'execute')
          -- sin contar las de extensiones (eso lo revisa la prueba de btree_gist)
-         and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')$q$, 'VERDADERO'),
+         and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
+         -- ni las de tipo trigger: PostgreSQL no deja llamarlas directo (p. ej. rls_auto_enable,
+         -- que crea Supabase si se activó "RLS automático" al crear el proyecto)
+         and p.prorettype not in ('trigger'::regtype, 'event_trigger'::regtype)$q$, 'VERDADERO'),
     jsonb_build_array('Estructura', 'Migración 002 aplicada (estados atendida / no_asistio)', 'base',
       $q$select pg_get_constraintdef(oid) like '%atendida%' from pg_constraint where conname = 'reservas_estado_check'$q$, 'VERDADERO'),
     jsonb_build_array('Estructura', 'RLS activado en las 5 tablas', 'base',

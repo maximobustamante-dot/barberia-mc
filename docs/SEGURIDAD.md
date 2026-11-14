@@ -180,6 +180,7 @@ Estas cosas las maneja Supabase y no se pueden probar en una copia local:
 | Registro de cuentas nuevas | Debe estar apagado | `npm run verificar` lo comprueba contra el Supabase real |
 | Tokens (JWT) falsificados | Supabase firma y verifica los tokens | Nunca publicar la clave `sb_secret_…` (la página se niega a arrancar si alguien la pega) |
 | Spam de "recuperar contraseña" | Los endpoints `/auth/v1/recover` y `/auth/v1/otp` se pueden llamar directo con la clave publicable, aunque la página no tenga esa opción. Supabase limita cuántos correos manda | Revisar Authentication → Rate Limits |
+| `rls_auto_enable` (Supabase) | Si al crear el proyecto se activó "RLS automático", Supabase crea esta función en `public` y, por sus permisos por defecto, `anon` figura con permiso para ejecutarla. No se puede llamar desde la API (es de tipo `event_trigger`) y solo activa RLS. Se encontró en el Supabase real al correr `verificar.sql` | Por orden: `revoke execute on function public.rls_auto_enable() from public, anon, authenticated;` (el RLS automático sigue funcionando) |
 | Configuración de Auth | Revisar a mano | Solo el proveedor Email activo; largo mínimo de contraseña de 12 o más; Redirect URLs limitadas al dominio publicado; protección de contraseñas filtradas (es de un plan de pago: si no está disponible, usar una contraseña única) |
 | Doble factor (MFA) para el dueño | No activado | Opcional: Supabase permite TOTP (app de autenticación) |
 
