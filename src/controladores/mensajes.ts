@@ -14,14 +14,16 @@ export const MENSAJES_RESERVA: Record<ErrorReserva, string> = {
   FECHA_FUERA_DE_RANGO: `Solo se puede reservar hasta ${DIAS_MAXIMO} días hacia adelante.`,
   DEMASIADAS_RESERVAS: 'Estamos recibiendo muchas reservas. Intenta en unos minutos o escríbenos por WhatsApp.',
   LIMITE_RESERVAS: 'Ya tienes 2 horas reservadas con este teléfono. Escríbenos por WhatsApp si necesitas otra.',
+  NOMBRE_INVALIDO: 'Escribe tu nombre solo con letras (sin números ni símbolos).',
+  TELEFONO_INVALIDO: 'Usa un celular chileno, por ejemplo +56 9 1234 5678. Si tu número es extranjero, escríbenos por WhatsApp.',
   OTRO: 'No pudimos guardar la reserva. Revisa tus datos e intenta de nuevo.',
 }
 
 // Avisos del formulario que se revisan antes de llamar a la base
 export const MENSAJES_FORMULARIO = {
   faltaElegir: 'Por favor selecciona servicio, barbero, fecha y hora.',
-  nombreCorto: 'Escribe tu nombre (al menos 2 letras).',
-  telefonoInvalido: 'Revisa tu teléfono, por ejemplo +56 9 1234 5678.',
+  nombreInvalido: 'Escribe tu nombre solo con letras (sin números ni símbolos), entre 2 y 60.',
+  telefonoInvalido: 'Usa un celular chileno, por ejemplo +56 9 1234 5678. Si tu número es extranjero, escríbenos por WhatsApp.',
   sinHoras: 'No pudimos cargar las horas disponibles. Intenta de nuevo.',
 }
 

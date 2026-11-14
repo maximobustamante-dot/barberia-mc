@@ -300,7 +300,7 @@ export default function Reserva() {
                       required
                       placeholder="Ej: Cristian Gómez"
                       minLength={2}
-                      maxLength={80}
+                      maxLength={60}
                       autoComplete="name"
                       value={r.nombre}
                       onChange={(e) => r.cambiarNombre(e.target.value)}
@@ -317,7 +317,7 @@ export default function Reserva() {
                       required
                       placeholder="+56 9 1234 5678"
                       pattern="\+?[0-9 \(\)\-]{8,20}"
-                      title="Ej: +56 9 1234 5678 (números, espacios, guiones o paréntesis)"
+                      title="Celular chileno, ej: +56 9 1234 5678"
                       autoComplete="tel"
                       value={r.telefono}
                       onChange={(e) => r.cambiarTelefono(e.target.value)}

@@ -3,10 +3,17 @@
 // Se usan en la página pública y en el panel.
 // ============================================================
 
-// Solo dígitos y con el 56 de Chile (igual que normalizar_telefono en SQL)
+// Prefijos con que se puede escribir un celular chileno antes de los 9 dígitos
+const PREFIJOS_CHILE = ['', '0', '56', '560', '0056', '00560']
+
+// Solo dígitos y con el 56 de Chile, igual que normalizar_telefono en SQL (migración 003):
+// +56 9 1234 5678 · 912345678 · 0056 9 1234 5678 · 56 09 1234 5678 → '56912345678'
 export function normalizarTelefono(telefono: string) {
   const numero = telefono.replace(/\D/g, '')
-  return numero.length === 9 && numero.startsWith('9') ? `56${numero}` : numero
+  const celular = numero.slice(-9)
+  return numero.length >= 9 && celular.startsWith('9') && PREFIJOS_CHILE.includes(numero.slice(0, -9))
+    ? `56${celular}`
+    : numero
 }
 
 // '56912345678' → '+56 9 1234 5678' (si no calza, se muestra tal cual)
@@ -21,5 +28,9 @@ export function formatearTelefono(telefono: string) {
 // reservas solo permite números y espacios ('+56 (9) 1234-5678' → '+56 9 1234 5678')
 export const limpiarTelefono = (t: string) => t.replace(/[()-]/g, ' ').replace(/\s+/g, ' ').trim()
 
-// ¿La base lo va a aceptar? Misma regla que el check de la tabla reservas (schema.sql)
-export const telefonoValido = (t: string) => /^\+?[0-9 ]{8,16}$/.test(limpiarTelefono(t))
+// ¿La base lo va a aceptar? El formato de la tabla reservas (schema.sql) y, desde la
+// migración 003, que sea un celular chileno: 56 9 + 8 dígitos (TELEFONO_INVALIDO si no)
+export function telefonoValido(t: string) {
+  const limpio = limpiarTelefono(t)
+  return /^\+?[0-9 ]{8,16}$/.test(limpio) && /^569\d{8}$/.test(normalizarTelefono(limpio))
+}

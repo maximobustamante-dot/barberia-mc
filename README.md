@@ -101,9 +101,14 @@ mismo segundo.
 
 ## Pruebas
 
-**39 pruebas de seguridad de la base, 35 pruebas unitarias y 34 comprobaciones de punta a punta
+**53 pruebas de seguridad de la base, 40 pruebas unitarias y 34 comprobaciones de punta a punta
 en el navegador, todas pasando.** El detalle de qué se probó y cómo está en
 [docs/PRUEBAS.md](docs/PRUEBAS.md).
+
+**Ataque simulado:** se atacó la base y la página como lo haría alguien de afuera (49 ataques:
+robar datos, volverse admin, inyección SQL, XSS, clickjacking, bots…). Nadie pudo leer datos de
+clientes ni entrar al panel. Se corrigieron los problemas de contenido malicioso y teléfono; queda pendiente el captcha contra bots.
+Detalle en [docs/SEGURIDAD.md](docs/SEGURIDAD.md).
 
 ```bash
 npm test          # pruebas unitarias (Vitest)
@@ -130,7 +135,7 @@ Sin `.env.local` la página funciona igual: la reserva muestra un botón de What
 panel funciona. Para conectar tu propia base:
 
 1. Crea un proyecto en [Supabase](https://supabase.com) y corre en el SQL Editor `supabase/schema.sql`
-   y luego `supabase/migraciones/002_login_dashboard.sql`. Al inicio de ese archivo están los pasos
+   y luego, en orden, cada archivo de `supabase/migraciones/` (002 y 003). Al inicio de 002 están los pasos
    para crear el usuario del dueño.
 2. Copia `.env.example` como `.env.local` con la URL del proyecto y la **clave publicable**.
 3. Corre `npm run verificar`.

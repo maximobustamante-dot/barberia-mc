@@ -79,10 +79,11 @@ supabase/
   schema.sql                Etapa 1: tablas, seguridad, reservas sin cuenta
   migraciones/              Cambios posteriores, se corren en orden
     002_login_dashboard.sql Etapa 2: administradores, panel y frenos contra abuso
-  verificar.sql             39 pruebas de seguridad; se corre en el SQL Editor y deshace todo
-  pruebas/                  Para correr verificar.sql fuera de Supabase (CI): emula roles y auth
+    003_seguridad.sql       Arreglos del ataque simulado: nombre seguro, teléfono, btree_gist
+  verificar.sql             53 pruebas de seguridad; se corre en el SQL Editor y deshace todo
+  pruebas/                  correr.sh (CI) y ataque.py (ataque simulado, solo contra la base de prueba)
 scripts/verificar-conexion.mjs  npm run verificar: conexión y permisos contra el Supabase real
-docs/                       PRUEBAS.md (informe), DESPLIEGUE.md (Vercel), capturas/
+docs/                       ARQUITECTURA, PRUEBAS, SEGURIDAD, REVISION, DESPLIEGUE y capturas/
 .github/workflows/ci.yml    Revisión automática en cada Pull Request
 .claude/agents/             Agentes revisores (solo aconsejan, no programan)
 ```
@@ -106,11 +107,18 @@ Tablas: `barberos`, `servicios`, `horarios` (por barbero y día de la semana), `
 - Estados: `pendiente`, `confirmada`, `atendida`, `no_asistio`, `cancelada`.
 - La restricción `sin_cruces` impide dos reservas activas del mismo barbero que se traslapen.
 - Frenos de la reserva pública: hasta 30 días hacia adelante, máximo 2 reservas futuras por
-  teléfono (normalizado con `normalizar_telefono`) y máximo 30 reservas nuevas por hora en total.
+  teléfono (normalizado con `normalizar_telefono`: `0056 9…`, `56 09…` y `9…` cuentan como el
+  mismo; debe ser celular chileno) y máximo 30 reservas nuevas por hora en total.
+- El nombre solo admite letras, espacios, apóstrofo, guion y punto (seguido de espacio), entre 2 y 60 (`nombre_valido` en SQL y
+  `nombreValido` en `modelos/cliente.ts`): así no se pueden meter links ni mensajes falsos que el
+  dueño reenviaría por WhatsApp. Ver `docs/SEGURIDAD.md`.
+- El público solo puede llamar 2 funciones propias: `horas_disponibles` y `crear_reserva` (las de
+  `btree_gist` pueden seguir visibles en Supabase si no se pudo mover; ver S-04). Cualquier
+  función nueva debe hacer `revoke ... from public, anon` salvo que sea para el público.
 - Errores que las funciones devuelven al frontend: `HORA_NO_DISPONIBLE`, `LIMITE_RESERVAS`,
-  `FECHA_FUERA_DE_RANGO`, `DEMASIADAS_RESERVAS`, `NO_AUTORIZADO`, `RANGO_INVALIDO`,
-  `ESTADO_INVALIDO`, `RESERVA_NO_EXISTE`.
-- Para cambiar la base: **crea un archivo nuevo** en `supabase/migraciones/` (`003_...sql`) y
+  `FECHA_FUERA_DE_RANGO`, `DEMASIADAS_RESERVAS`, `NOMBRE_INVALIDO`, `TELEFONO_INVALIDO`, `NO_AUTORIZADO`,
+  `RANGO_INVALIDO`, `ESTADO_INVALIDO`, `RESERVA_NO_EXISTE`.
+- Para cambiar la base: **crea un archivo nuevo** en `supabase/migraciones/` (`004_...sql`) y
   córrelo en el SQL Editor. No edites una migración que ya se corrió.
 
 ### Instalar desde cero
@@ -172,8 +180,9 @@ Tablas: `barberos`, `servicios`, `horarios` (por barbero y día de la semana), `
 
 ## Pendientes / ideas
 
-- Captcha (Cloudflare Turnstile) en la reserva, validado en una Edge Function: es el freno real
-  contra bots para un cliente en producción.
+- **Captcha (Cloudflare Turnstile) en la reserva, validado en una Edge Function.** Es el único
+  hallazgo abierto del ataque simulado (S-03 en `docs/SEGURIDAD.md`): hoy un bot puede crear 30
+  reservas falsas por hora y bloquear a los clientes reales. Obligatorio antes de un cliente real.
 - Borrar automáticamente reservas de más de 12 meses (lo promete la página de privacidad).
 - Bloquear horas o días (vacaciones, feriados) desde el panel.
 - Editar servicios, precios y barberos desde el panel (hoy se hace en Supabase → Table Editor).

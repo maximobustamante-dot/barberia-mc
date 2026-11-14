@@ -14,7 +14,14 @@ export const reservaEnLinea = supabase !== null
 export const DIAS_MAXIMO = 30
 
 // Errores que puede devolver la función SQL crear_reserva
-export const ERRORES_RESERVA = ['HORA_NO_DISPONIBLE', 'FECHA_FUERA_DE_RANGO', 'DEMASIADAS_RESERVAS', 'LIMITE_RESERVAS'] as const
+export const ERRORES_RESERVA = [
+  'HORA_NO_DISPONIBLE',
+  'FECHA_FUERA_DE_RANGO',
+  'DEMASIADAS_RESERVAS',
+  'LIMITE_RESERVAS',
+  'NOMBRE_INVALIDO',
+  'TELEFONO_INVALIDO',
+] as const
 export type ErrorReserva = (typeof ERRORES_RESERVA)[number] | 'OTRO'
 
 // Servicios y barberos activos. null = la base no respondió o no hay ninguno activo.

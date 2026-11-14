@@ -6,7 +6,8 @@ claves de Supabase y una cuenta de Vercel. Vercel es gratis para proyectos perso
 ## 1. Antes de publicar
 
 - [ ] La rama con los cambios ya está unida a `main` en GitHub (Pull Request → Merge).
-- [ ] En Supabase ya se corrieron `schema.sql` y `migraciones/002_login_dashboard.sql`.
+- [ ] En Supabase ya se corrieron `schema.sql` y, en orden, `migraciones/002_login_dashboard.sql` y
+      `migraciones/003_seguridad.sql`.
 - [ ] `supabase/verificar.sql` da todo ✅.
 - [ ] Borraste las reservas de prueba: `delete from reservas;` en el SQL Editor.
 

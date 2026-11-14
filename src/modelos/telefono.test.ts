@@ -10,6 +10,8 @@ describe('normalizarTelefono', () => {
     ['9 1234 5678', '56912345678'],
     ['912345678', '56912345678'],
     ['+56 (9) 1234-5678', '56912345678'],
+    ['0056 9 1234 5678', '56912345678'], // así se saltaba el límite antes de la migración 003
+    ['56 09 1234 5678', '56912345678'],
   ])('%s → %s', (entrada, esperado) => {
     expect(normalizarTelefono(entrada)).toBe(esperado)
   })
@@ -45,5 +47,8 @@ describe('telefonoValido', () => {
   })
   it('rechaza lo que el navegador deja pasar pero la base no aceptaría', () => {
     for (const t of ['--------', '((((((((', '+56 9 1234 5678 9999', '1234']) expect(telefonoValido(t)).toBe(false)
+  })
+  it('solo celulares chilenos (migración 003): se cierran las otras formas de saltarse el límite', () => {
+    for (const t of ['22 345 6789', '+1 555 123 4567', '056 9 1234 5678', '99 1234 5678']) expect(telefonoValido(t)).toBe(false)
   })
 })

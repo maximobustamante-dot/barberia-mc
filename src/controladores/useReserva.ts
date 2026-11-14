@@ -7,6 +7,7 @@
 // dentro de un componente, y React los vuelve a ejecutar cada vez que algo cambia.
 // ============================================================
 import { useEffect, useState } from 'react'
+import { nombreValido } from '../modelos/cliente'
 import { hoyChile, sumarDias } from '../modelos/fechas'
 import { fechaCorta } from '../modelos/formato'
 import {
@@ -116,7 +117,7 @@ export function useReserva() {
   // 4. Enviar: primero se revisa aquí (mensajes claros) y después la base revisa de nuevo
   async function enviar() {
     if (!servicioId || !barberoId || !hora) return setError(MENSAJES_FORMULARIO.faltaElegir)
-    if (nombre.trim().length < 2) return setError(MENSAJES_FORMULARIO.nombreCorto)
+    if (!nombreValido(nombre)) return setError(MENSAJES_FORMULARIO.nombreInvalido)
     if (!telefonoValido(telefono)) return setError(MENSAJES_FORMULARIO.telefonoInvalido)
 
     setEnviando(true)

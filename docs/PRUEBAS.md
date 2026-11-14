@@ -3,16 +3,20 @@
 Qué se probó del proyecto, cómo y con qué resultado. Fecha de la última corrida completa:
 **12 de noviembre de 2026** (rama `login-dashboard`).
 
-**Resumen:** 39 pruebas de seguridad de la base, 35 pruebas unitarias y 34 comprobaciones de
+**Resumen:** 53 pruebas de seguridad de la base, 40 pruebas unitarias y 34 comprobaciones de
 punta a punta en el navegador. **Todas pasaron.** Durante las pruebas apareció un solo error, y era
 del entorno de prueba, no del proyecto (ver [Hallazgos](#hallazgos)).
 
+Aparte, el 14 de noviembre se hizo un **ataque simulado** (49 ataques). Sus resultados y
+correcciones están en [SEGURIDAD.md](SEGURIDAD.md).
+
 | Capa | Herramienta | Pruebas | Resultado | Cómo repetirlas |
 |---|---|---|---|---|
-| Base de datos y permisos | SQL (`supabase/verificar.sql`) | 39 | ✅ 39/39 | SQL Editor de Supabase o `bash supabase/pruebas/correr.sh` |
-| Lógica de la página | Vitest | 35 | ✅ 35/35 | `npm test` |
+| Base de datos y permisos | SQL (`supabase/verificar.sql`) | 53 | ✅ 53/53 | SQL Editor de Supabase o `bash supabase/pruebas/correr.sh` |
+| Lógica de la página | Vitest | 40 | ✅ 40/40 | `npm test` |
 | Conexión página ↔ Supabase | `scripts/verificar-conexion.mjs` | 15 + 4 opcionales | ✅ | `npm run verificar` |
 | De punta a punta (navegador) | Playwright | 34 | ✅ 34/34 | Manual (ver [más abajo](#4-de-punta-a-punta-en-el-navegador)) |
+| Ataque simulado | `supabase/pruebas/ataque.py` + navegador | 49 | 47 bloqueados, 2 pendientes (bots) | Ver [SEGURIDAD.md](SEGURIDAD.md) |
 | Calidad de código | TypeScript + oxlint + build | — | ✅ sin errores | `npm run lint` · `npm run build` |
 
 Las capas 1, 2 y 5 corren solas en GitHub Actions en cada Pull Request (`.github/workflows/ci.yml`).
@@ -69,6 +73,26 @@ reservas guardadas. Se comprobó que después de correrlo la tabla `reservas` qu
 | 37 | Administrador | Leer la tabla `reservas` directo (incluso siendo admin) | rechazado | ✅ |
 | 38–39 | Reserva pública | Reserva n.º 31 en la misma hora (freno contra bots) | `DEMASIADAS_RESERVAS` | ✅ |
 
+### Pruebas agregadas después del ataque simulado (migración 003)
+
+Los números de la tabla de arriba corresponden a la primera versión del script (39 pruebas).
+Estas 14 se agregaron el 14 de noviembre:
+
+| Grupo | Prueba | Esperado | Resultado |
+|---|---|---|---|
+| Estructura | La migración 003 está aplicada | sí | ✅ |
+| Estructura | `btree_gist` está fuera de `public` (sus funciones no salen en la API) | sí | ✅ |
+| Estructura | El público solo puede llamar 2 funciones | sí | ✅ |
+| Reserva pública | Tercera reserva con el teléfono escrito `0056 9…` | `LIMITE_RESERVAS` | ✅ |
+| Ataque simulado | Nombre con HTML, con un link o con saltos de línea (3 pruebas) | `NOMBRE_INVALIDO` | ✅ |
+| Ataque simulado | Un nombre real con tildes, ñ, apóstrofo y punto ("Juan P.") | aceptado | ✅ |
+| Ataque simulado | Teléfono que no es celular chileno | `TELEFONO_INVALIDO` | ✅ |
+| Administrador | Confirmar una reserva vieja con un nombre de antes de 003 (3 pasos de preparación + la prueba) | permitido | ✅ |
+| Ataque simulado | Llamar `nombre_valido()` desde la página | rechazado | ✅ |
+
+Sin la migración 003, estas pruebas salen ❌. Así `verificar.sql` también sirve para saber si
+falta correrla en Supabase.
+
 **Que el script detecte los problemas:**
 
 - Sin ningún administrador, las pruebas 5 y 30–36 salieron ❌ con el aviso "No hay administradores".
@@ -84,12 +108,13 @@ proyecto hay que correrlo una vez** (ver [Pendiente](#pendiente-verificar-en-el-
 
 ## 2. Pruebas unitarias (Vitest)
 
-`npm test` corre 35 pruebas en 7 archivos:
+`npm test` corre 40 pruebas en 8 archivos:
 
 | Archivo | Qué comprueba |
 |---|---|
-| `src/modelos/telefono.test.ts` | `+56 9 1234 5678`, `56912345678`, `9 1234 5678` y `+56 (9) 1234-5678` quedan iguales (igual que `normalizar_telefono` en SQL). Formato para mostrar. Guiones y paréntesis se limpian para que la base acepte el número. |
+| `src/modelos/telefono.test.ts` | `+56 9 1234 5678`, `56912345678`, `9 1234 5678` y `+56 (9) 1234-5678` quedan iguales, también `0056 9…` y `56 09…` (igual que `normalizar_telefono` en SQL). Formato para mostrar. Guiones y paréntesis se limpian para que la base acepte el número. |
 | `src/modelos/horario.test.ts` | "Abierto ahora / Abre mañana / Abre el lunes" en hora de Chile, incluyendo el cierre exacto (20:00), el sábado y el domingo. |
+| `src/modelos/cliente.test.ts` | El nombre acepta tildes, ñ, apóstrofo y guion, y el punto al final de una palabra ("Juan P."); rechaza HTML, links como "bit.ly", saltos de línea, caracteres invisibles y números (igual que `nombre_valido` en SQL). |
 | `src/modelos/fechas.test.ts` | Conversión hora de Chile → UTC en verano (UTC-3) y en invierno (UTC-4). Una reserva a las 23:30 sigue siendo de ese día. Suma de días entre meses y años. Lunes de la semana. |
 | `src/modelos/enlaces.test.ts` | Enlaces de WhatsApp del local (con y sin mensaje), de Instagram y del cliente (número normalizado y mensaje con la hora en Chile). |
 | `src/modelos/formato.test.ts` | Pesos chilenos, fecha corta y cómo se saca el código de error que lanza cada función SQL. |

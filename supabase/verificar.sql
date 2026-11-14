@@ -12,7 +12,11 @@
 --   base     = revisiones de estructura (como el dueño de la base)
 --
 -- Resultado: una tabla con ✅ / ❌ por prueba. Todo debería salir ✅.
--- Requisitos: schema.sql + migraciones/002 corridos y al menos un administrador.
+-- Requisitos: schema.sql + migraciones 002 y 003 corridas y al menos un administrador.
+-- Nota: una prueba apaga un momento el trigger nombre_seguro para simular una reserva
+-- antigua; como todo se deshace al final, el trigger queda igual que antes. Mientras corre
+-- (unos segundos) la tabla reservas queda bloqueada y las reservas nuevas esperan:
+-- conviene correrlo en un horario sin clientes.
 -- =====================================================================
 
 drop table if exists pg_temp.verificacion;
@@ -50,10 +54,20 @@ begin
   -- -------------------------------------------------------------------
   -- Lista de pruebas: grupo, descripción, rol, consulta y resultado esperado.
   -- esperado: OK (sin error) · VERDADERO · un código de error (NO_AUTORIZADO…)
+  --           HECHO = un comando que no devuelve nada (alter table…) y no debe fallar
   --           SIN_PERMISO = PostgreSQL rechaza por falta de permisos (42501)
   -- -------------------------------------------------------------------
   pruebas := jsonb_build_array(
     -- 1. Estructura
+    jsonb_build_array('Estructura', 'Migración 003 aplicada (nombre_valido existe)', 'base',
+      $q$select exists (select 1 from pg_proc where proname = 'nombre_valido' and pronamespace = 'public'::regnamespace)$q$, 'VERDADERO'),
+    jsonb_build_array('Estructura', 'btree_gist fuera de public (sus funciones no salen en la API)', 'base',
+      $q$select extnamespace <> 'public'::regnamespace from pg_extension where extname = 'btree_gist'$q$, 'VERDADERO'),
+    jsonb_build_array('Estructura', 'El público solo puede llamar 2 funciones nuestras (horas_disponibles y crear_reserva)', 'base',
+      $q$select count(*) = 2 from pg_proc p where p.pronamespace = 'public'::regnamespace
+         and has_function_privilege('anon', p.oid, 'execute')
+         -- sin contar las de extensiones (eso lo revisa la prueba de btree_gist)
+         and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')$q$, 'VERDADERO'),
     jsonb_build_array('Estructura', 'Migración 002 aplicada (estados atendida / no_asistio)', 'base',
       $q$select pg_get_constraintdef(oid) like '%atendida%' from pg_constraint where conname = 'reservas_estado_check'$q$, 'VERDADERO'),
     jsonb_build_array('Estructura', 'RLS activado en las 5 tablas', 'base',
@@ -109,6 +123,20 @@ begin
       format($q$select crear_reserva(1, 3, %L, %L, 'Prueba Verificación', '56900000001')$q$, v_fecha, v_h2), 'OK'),
     jsonb_build_array('Reserva pública', 'Tercera reserva del mismo teléfono → rechazada', 'anon',
       format($q$select crear_reserva(2, 3, %L, %L, 'Prueba Verificación', '9 0000 0001')$q$, v_fecha, v_h3), 'LIMITE_RESERVAS'),
+    jsonb_build_array('Reserva pública', 'Tercera con el teléfono escrito 0056 9… → rechazada (003)', 'anon',
+      format($q$select crear_reserva(2, 3, %L, %L, 'Prueba Verificación', '0056 9 0000 0001')$q$, v_fecha, v_h3), 'LIMITE_RESERVAS'),
+    jsonb_build_array('Ataque simulado', 'Nombre con HTML/JavaScript → rechazado', 'anon',
+      format($q$select crear_reserva(2, 3, %L, %L, '<img src=x onerror=alert(1)>', '+56 9 0000 0004')$q$, v_fecha, v_h3), 'NOMBRE_INVALIDO'),
+    jsonb_build_array('Ataque simulado', 'Nombre con un link (phishing por el WhatsApp del dueño) → rechazado', 'anon',
+      format($q$select crear_reserva(2, 3, %L, %L, 'Paga en bit.ly/pago', '+56 9 0000 0005')$q$, v_fecha, v_h3), 'NOMBRE_INVALIDO'),
+    jsonb_build_array('Ataque simulado', 'Nombre con saltos de línea → rechazado', 'anon',
+      format($q$select crear_reserva(2, 3, %L, %L, E'Ana\n\nTu hora fue anulada', '+56 9 0000 0006')$q$, v_fecha, v_h3), 'NOMBRE_INVALIDO'),
+    jsonb_build_array('Ataque simulado', 'Un nombre real con tildes, ñ, apóstrofo y punto sí pasa', 'base',
+      $q$select nombre_valido('José Muñoz') and nombre_valido('D''Angelo Núñez') and nombre_valido('Juan P.')$q$, 'VERDADERO'),
+    jsonb_build_array('Ataque simulado', 'Teléfono que no es celular chileno → rechazado', 'anon',
+      format($q$select crear_reserva(2, 3, %L, %L, 'Ana Pérez', '22 345 6789')$q$, v_fecha, v_h3), 'TELEFONO_INVALIDO'),
+    jsonb_build_array('Ataque simulado', 'NO puede usar nombre_valido() (función interna)', 'anon',
+      $q$select nombre_valido('Ana')$q$, 'SIN_PERMISO'),
     jsonb_build_array('Reserva pública', 'Más de 30 días adelante → rechazada', 'anon',
       format($q$select crear_reserva(1, 3, %L, '10:00', 'Prueba Verificación', '+56 9 0000 0003')$q$, v_lejos), 'FECHA_FUERA_DE_RANGO'),
 
@@ -122,6 +150,20 @@ begin
     jsonb_build_array('Administrador', 'El cambio quedó guardado', 'admin',
       format($q$select exists (select 1 from admin_reservas(%L, %L)
                where cliente_nombre = 'Prueba Verificación' and estado = 'confirmada')$q$, v_fecha, v_fecha), 'VERDADERO'),
+    -- Reservas creadas antes de la migración 003 pueden tener nombres que hoy no se aceptan.
+    -- El panel debe poder cambiarles el estado igual (el trigger solo revisa reservas nuevas).
+    jsonb_build_array('Administrador', '(preparación) reserva vieja con un nombre de antes de 003', 'base',
+      'alter table reservas disable trigger nombre_seguro', 'HECHO'),
+    jsonb_build_array('Administrador', '(preparación) reserva vieja con un nombre de antes de 003', 'base',
+      format($q$insert into reservas (barbero_id, servicio_id, inicio, fin, cliente_nombre, cliente_telefono)
+         values (3, 3, (%L::date + time '19:00') at time zone 'America/Santiago',
+                 (%L::date + time '19:25') at time zone 'America/Santiago', 'María José R. (2)', '+56 9 0000 0007')
+         returning 'ok'$q$, v_fecha, v_fecha), 'OK'),
+    jsonb_build_array('Administrador', '(preparación) reserva vieja con un nombre de antes de 003', 'base',
+      'alter table reservas enable trigger nombre_seguro', 'HECHO'),
+    jsonb_build_array('Administrador', 'Puede confirmar una reserva vieja con nombre antiguo', 'admin',
+      format($q$select admin_cambiar_estado((select id from admin_reservas(%L, %L)
+               where cliente_nombre = 'María José R. (2)'), 'confirmada')$q$, v_fecha, v_fecha), 'OK'),
     jsonb_build_array('Administrador', 'Estado inventado → rechazado', 'admin',
       $q$select admin_cambiar_estado(gen_random_uuid(), 'pagada')$q$, 'ESTADO_INVALIDO'),
     jsonb_build_array('Administrador', 'Reserva que no existe → error claro', 'admin',
@@ -165,9 +207,15 @@ begin
       end if;
 
       begin
-        execute t->>3 into v;
+        if t->>4 = 'HECHO' then
+          execute t->>3;
+          v := 'hecho';
+        else
+          execute t->>3 into v;
+        end if;
         ok := case t->>4
                 when 'OK' then true
+                when 'HECHO' then true
                 when 'VERDADERO' then v = 'true'
                 when 'FALSO' then v = 'false'
                 else false
