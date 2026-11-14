@@ -6,7 +6,7 @@ describe('fuenteDemo (panel de demostración)', () => {
   const desde = lunesDe(hoyChile())
   const hasta = sumarDias(desde, 6)
 
-  it('genera reservas de lunes a sábado y ninguna el domingo', async () => {
+  it('genera reservas solo los días que el local atiende (ninguna el domingo)', async () => {
     const { filas } = await fuenteDemo(() => {}).cargar(desde, hasta)
     expect(filas.length).toBeGreaterThan(0)
     const dias = new Set(filas.map((r) => diaDe(r.inicio)))

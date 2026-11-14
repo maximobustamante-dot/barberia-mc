@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { barberos } from '../data/barberos'
 import { servicios } from '../data/servicios'
+import { aMinutos, aperturaDeFecha } from '../lib/horario'
 import { diaDe, hoyChile, instanteChile, mensajeError, sumarDias, type Estado, type ReservaAdmin } from './util'
 
 // De dónde saca el panel las reservas. Panel.tsx no sabe si vienen de
@@ -51,14 +52,15 @@ function generador(semilla: number) {
 }
 
 function generarDia(dia: string, hoy: string): ReservaAdmin[] {
-  const diaSemana = new Date(`${dia}T12:00:00Z`).getUTCDay()
-  if (diaSemana === 0) return [] // domingo cerrado
-  const cierre = diaSemana === 6 ? 18 * 60 : 20 * 60
+  const apertura = aperturaDeFecha(dia) // horario de negocio.apertura
+  if (!apertura) return [] // ese día el local no atiende
+  const abre = aMinutos(apertura.abre)
+  const cierre = aMinutos(apertura.cierra)
   const azar = generador(Number(dia.replaceAll('-', '')))
   const filas: ReservaAdmin[] = []
 
   for (const b of barberos) {
-    let minuto = 10 * 60 + Math.floor(azar() * 4) * 30 // primera hora entre 10:00 y 11:30
+    let minuto = abre + Math.floor(azar() * 4) * 30 // primera reserva entre la apertura y 1 h 30 después
     const cantidad = 2 + Math.floor(azar() * 3) // 2 a 4 reservas por barbero
     for (let i = 0; i < cantidad; i++) {
       const s = servicios[Math.floor(azar() * servicios.length)]

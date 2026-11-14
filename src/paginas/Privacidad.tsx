@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { negocio } from '../data/negocio'
+import IconoTijeras from '../components/IconoTijeras'
 
 // Texto de ejemplo para la plantilla. Con cada cliente real hay que revisarlo:
 // quién es el responsable, por cuánto tiempo se guardan los datos y dónde.
@@ -10,13 +11,7 @@ export default function Privacidad() {
       <article className="mx-auto max-w-2xl">
         <Link to="/" className="inline-flex items-center gap-2.5 font-titulo text-2xl uppercase tracking-wider">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rojo text-white">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="6" cy="6" r="3" />
-              <path d="M8.12 8.12 12 12" />
-              <path d="M20 4 8.12 15.88" />
-              <circle cx="6" cy="18" r="3" />
-              <path d="M14.8 14.8 20 20" />
-            </svg>
+            <IconoTijeras className="h-4 w-4" />
           </span>
           {negocio.nombre}
         </Link>

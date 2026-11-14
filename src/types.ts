@@ -26,12 +26,16 @@ export interface Negocio {
   }
 }
 
+// Categorías de los filtros de la sección Servicios
+export type CategoriaServicio = 'cortes' | 'barba' | 'detalles'
+
 export interface Servicio {
   id: number
   nombre: string
   descripcion: string
   precio: number // en pesos chilenos
   duracionMin: number
+  categoria: CategoriaServicio
   destacado?: boolean // muestra la insignia "Más pedido"
 }
 

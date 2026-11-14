@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { negocio } from '../data/negocio'
 import { estadoHorario } from '../lib/horario'
 
-const amenities = [
+const comodidades = [
   {
     titulo: 'Estacionamiento',
     desc: 'Cercano y seguro',
@@ -127,7 +127,7 @@ export default function Ubicacion() {
             Comodidades del local
           </p>
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {amenities.map((a) => (
+            {comodidades.map((a) => (
               <div
                 key={a.titulo}
                 className="flex flex-col items-center rounded-2xl border border-azul/10 bg-white/70 p-4 text-center shadow-sm transition-all hover:bg-white hover:shadow-md"

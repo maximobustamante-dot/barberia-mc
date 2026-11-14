@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { negocio } from '../data/negocio'
 import { formatearTelefono } from '../lib/telefono'
 import IconoWhatsApp from './IconoWhatsApp'
+import IconoTijeras from './IconoTijeras'
 
 const anio = new Date().getFullYear()
 
@@ -12,13 +13,7 @@ export default function Footer() {
         <div>
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rojo text-white">
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="6" cy="6" r="3" />
-                <path d="M8.12 8.12 12 12" />
-                <path d="M20 4 8.12 15.88" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M14.8 14.8 20 20" />
-              </svg>
+              <IconoTijeras className="h-4 w-4" />
             </span>
             <p className="font-titulo text-2xl font-bold uppercase tracking-wider text-white">
               {negocio.nombre}

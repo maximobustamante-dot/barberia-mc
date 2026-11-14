@@ -13,7 +13,8 @@ correr -f schema.sql
 for m in migraciones/*.sql; do correr -f "$m"; done
 correr -c "insert into administradores (user_id, nombre) select id, 'Dueño' from auth.users where email = 'dueno@prueba.cl'"
 
-resultado=$(correr -f verificar.sql 2>/dev/null)
+# PGOPTIONS oculta los avisos (NOTICE) de PostgreSQL, pero deja ver los errores
+resultado=$(PGOPTIONS='--client-min-messages=warning' correr -f verificar.sql)
 echo "$resultado"
 if grep -q '❌' <<< "$resultado"; then
   echo "Hay pruebas que fallaron" >&2

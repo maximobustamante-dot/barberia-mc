@@ -1,26 +1,21 @@
 import { useState } from 'react'
 import { servicios } from '../data/servicios'
+import type { CategoriaServicio } from '../types'
 import TarjetaServicio from './TarjetaServicio'
 
-type Categoria = 'todos' | 'cortes' | 'barba' | 'cejas'
+type Categoria = 'todos' | CategoriaServicio
 
 const filtros: { id: Categoria; etiqueta: string }[] = [
   { id: 'todos', etiqueta: 'Todos' },
   { id: 'cortes', etiqueta: 'Cortes' },
   { id: 'barba', etiqueta: 'Barba & Combos' },
-  { id: 'cejas', etiqueta: 'Detalles' },
+  { id: 'detalles', etiqueta: 'Detalles' },
 ]
 
 export default function Servicios() {
   const [categoria, setCategoria] = useState<Categoria>('todos')
 
-  const serviciosFiltrados = servicios.filter((s) => {
-    if (categoria === 'todos') return true
-    if (categoria === 'cortes') return [1, 2, 5].includes(s.id)
-    if (categoria === 'barba') return [3, 4].includes(s.id)
-    if (categoria === 'cejas') return s.id === 6
-    return true
-  })
+  const serviciosFiltrados = servicios.filter((s) => categoria === 'todos' || s.categoria === categoria)
 
   return (
     <section id="servicios" className="scroll-mt-24 bg-azul-claro px-6 py-24 text-azul">
@@ -34,12 +29,13 @@ export default function Servicios() {
             </p>
           </div>
 
-          {/* Filtros por categoría (solo en pantallas medianas y grandes) */}
+          {/* Filtros por categoría (se ocultan en celulares: sm de Tailwind = 640 px o más) */}
           <div className="hidden flex-wrap gap-2 sm:flex">
             {filtros.map((f) => (
               <button
                 key={f.id}
                 type="button"
+                aria-pressed={categoria === f.id}
                 onClick={() => setCategoria(f.id)}
                 className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all ${
                   categoria === f.id

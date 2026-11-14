@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { negocio } from '../data/negocio'
+import { hoyChile, sumarDias } from '../lib/fechas'
+import { formatearTelefono, limpiarTelefono, telefonoValido } from '../lib/telefono'
 
 interface Opcion {
   id: number
@@ -18,26 +20,10 @@ interface Confirmada {
   barbero: string
   fecha: string
   hora: string
-  telefono?: string
-  nombre?: string
 }
 
-// Fecha de hoy en formato yyyy-mm-dd según la hora del computador
-function hoy() {
-  const d = new Date()
-  const mes = String(d.getMonth() + 1).padStart(2, '0')
-  const dia = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mes}-${dia}`
-}
-
-// Fecha de hoy + n días (hasta dónde se puede reservar)
-function enDias(n: number) {
-  const d = new Date()
-  d.setDate(d.getDate() + n)
-  const mes = String(d.getMonth() + 1).padStart(2, '0')
-  const dia = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mes}-${dia}`
-}
+// Hasta cuántos días hacia adelante se puede reservar (igual que crear_reserva en SQL)
+const DIAS_MAXIMO = 30
 
 // '2026-11-16' → '16-11-2026'
 function formatearFecha(fecha: string) {
@@ -52,7 +38,7 @@ export default function Reserva() {
 
   const [servicioId, setServicioId] = useState<number | null>(null)
   const [barberoId, setBarberoId] = useState<number | null>(null)
-  const [fecha, setFecha] = useState(hoy())
+  const [fecha, setFecha] = useState(hoyChile) // hoy en Chile, no en el computador del visitante
   const [hora, setHora] = useState('')
   const [nombre, setNombre] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -61,7 +47,9 @@ export default function Reserva() {
   const [horasCargadas, setHorasCargadas] = useState({ clave: '', horas: [] as string[] })
   const [recarga, setRecarga] = useState(0)
   const [enviando, setEnviando] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState('') // problema al enviar la reserva
+  const [errorHoras, setErrorHoras] = useState('') // problema al cargar las horas libres
+  const [sinConexion, setSinConexion] = useState(false) // no cargaron servicios o barberos (¿Supabase pausado?)
   const [confirmada, setConfirmada] = useState<Confirmada | null>(null)
 
   // 1. Escuchar eventos de selección externa desde TarjetaServicio y TarjetaBarbero
@@ -71,6 +59,7 @@ export default function Reserva() {
       if (id) {
         setServicioId(id)
         setHora('')
+        setError('')
         setConfirmada(null)
       }
     }
@@ -79,6 +68,7 @@ export default function Reserva() {
       if (id) {
         setBarberoId(id)
         setHora('')
+        setError('')
         setConfirmada(null)
       }
     }
@@ -100,14 +90,13 @@ export default function Reserva() {
       .select('id, nombre, precio, duracionMin:duracion_min')
       .order('id')
       .then(({ data, error: err }) => {
-        if (err) {
-          setError('No pudimos cargar los servicios disponibles.')
+        // Sin respuesta o sin servicios activos: no se puede reservar en línea → WhatsApp
+        if (err || !data?.length) {
+          setSinConexion(true)
           return
         }
-        if (data && data.length > 0) {
-          setServicios(data)
-          setServicioId((prev) => (prev && data.some((s) => s.id === prev) ? prev : data[0].id))
-        }
+        setServicios(data)
+        setServicioId((prev) => (prev && data.some((s) => s.id === prev) ? prev : data[0].id))
       })
 
     supabase
@@ -115,14 +104,12 @@ export default function Reserva() {
       .select('id, nombre')
       .order('id')
       .then(({ data, error: err }) => {
-        if (err) {
-          setError('No pudimos cargar los barberos disponibles.')
+        if (err || !data?.length) {
+          setSinConexion(true)
           return
         }
-        if (data && data.length > 0) {
-          setBarberos(data)
-          setBarberoId((prev) => (prev && data.some((b) => b.id === prev) ? prev : data[0].id))
-        }
+        setBarberos(data)
+        setBarberoId((prev) => (prev && data.some((b) => b.id === prev) ? prev : data[0].id))
       })
   }, [])
 
@@ -139,11 +126,12 @@ export default function Reserva() {
       .then(({ data, error: err }) => {
         if (!vigente) return
         if (err) {
-          setError('No pudimos cargar las horas disponibles. Intenta de nuevo.')
+          setErrorHoras('No pudimos cargar las horas disponibles. Intenta de nuevo.')
           setHorasCargadas({ clave, horas: [] })
           return
         }
         const lista = (data as { hora: string }[]).map((h) => h.hora.slice(0, 5))
+        setErrorHoras('')
         setHorasCargadas({ clave, horas: lista })
       })
     return () => {
@@ -155,6 +143,14 @@ export default function Reserva() {
   const servicioActual = servicios.find((s) => s.id === servicioId)
   const barberoActual = barberos.find((b) => b.id === barberoId)
 
+  // Cambiar servicio, barbero o fecha obliga a elegir hora de nuevo y borra el aviso anterior
+  function cambiarSeleccion(cambio: () => void) {
+    cambio()
+    setHora('')
+    setError('')
+    setErrorHoras('')
+  }
+
   // 4. Enviar la reserva
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -162,6 +158,14 @@ export default function Reserva() {
 
     if (!servicioId || !barberoId || !hora) {
       setError('Por favor selecciona servicio, barbero, fecha y hora.')
+      return
+    }
+    if (nombre.trim().length < 2) {
+      setError('Escribe tu nombre (al menos 2 letras).')
+      return
+    }
+    if (!telefonoValido(telefono)) {
+      setError('Revisa tu teléfono, por ejemplo +56 9 1234 5678.')
       return
     }
 
@@ -174,7 +178,7 @@ export default function Reserva() {
       p_fecha: fecha,
       p_hora: hora,
       p_nombre: nombre,
-      p_telefono: telefono,
+      p_telefono: limpiarTelefono(telefono),
     })
     setEnviando(false)
 
@@ -201,8 +205,6 @@ export default function Reserva() {
       barbero: barberoActual?.nombre ?? '',
       fecha: formatearFecha(fecha),
       hora,
-      nombre,
-      telefono,
     })
 
     setHora('')
@@ -233,14 +235,16 @@ export default function Reserva() {
           </p>
         </div>
 
-        {/* Si Supabase no está configurado, reemplaza el formulario con contacto a WhatsApp */}
-        {!supabase ? (
+        {/* Sin Supabase configurado, o si no responde (p. ej. proyecto pausado): contacto por WhatsApp */}
+        {!supabase || sinConexion ? (
           <div className="mx-auto mt-12 max-w-xl rounded-3xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur-xl shadow-xl">
             <h3 className="font-titulo text-2xl uppercase tracking-wider text-[#f5f2ec] md:text-3xl">
               Reserva tu hora por WhatsApp
             </h3>
             <p className="mx-auto mt-3 max-w-md text-sm text-stone-300">
-              Contáctanos directamente por WhatsApp para consultar disponibilidad y coordinar tu hora.
+              {sinConexion
+                ? 'En este momento no podemos mostrar las horas en línea. Escríbenos y te agendamos al tiro.'
+                : 'Contáctanos directamente por WhatsApp para consultar disponibilidad y coordinar tu hora.'}
             </p>
             <div className="mt-8 flex flex-col items-center gap-3">
               <a
@@ -249,12 +253,12 @@ export default function Reserva() {
                 rel="noreferrer"
                 className="inline-flex items-center justify-center gap-2.5 rounded-full bg-rojo px-8 py-4 font-semibold text-[#f5f2ec] shadow-lg shadow-black/40 transition-all hover:bg-rojo/85 hover:shadow-xl hover:shadow-black/60 active:scale-95"
               >
-                <span>Contactar por WhatsApp ({negocio.telefono})</span>
+                <span>Contactar por WhatsApp</span>
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </a>
-              <span className="text-xs text-stone-400">+{negocio.telefono}</span>
+              <span className="text-xs text-stone-400">{formatearTelefono(negocio.telefono)}</span>
             </div>
           </div>
         ) : confirmada ? (
@@ -332,10 +336,7 @@ export default function Reserva() {
                           key={s.id}
                           type="button"
                           aria-pressed={seleccionado}
-                          onClick={() => {
-                            setServicioId(s.id)
-                            setHora('')
-                          }}
+                          onClick={() => cambiarSeleccion(() => setServicioId(s.id))}
                           className={`flex flex-col justify-between rounded-xl border p-3 text-left transition-all sm:p-4 ${
                             seleccionado
                               ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
@@ -388,10 +389,7 @@ export default function Reserva() {
                           key={b.id}
                           type="button"
                           aria-pressed={seleccionado}
-                          onClick={() => {
-                            setBarberoId(b.id)
-                            setHora('')
-                          }}
+                          onClick={() => cambiarSeleccion(() => setBarberoId(b.id))}
                           className={`flex flex-col items-center rounded-xl border p-3.5 text-center transition-all ${
                             seleccionado
                               ? 'border-rojo bg-[#f7f4ee] text-azul shadow-md ring-1 ring-rojo'
@@ -428,13 +426,10 @@ export default function Reserva() {
                     aria-label="Fecha de la reserva"
                     type="date"
                     required
-                    min={hoy()}
-                    max={enDias(30)}
+                    min={hoyChile()}
+                    max={sumarDias(hoyChile(), DIAS_MAXIMO)}
                     value={fecha}
-                    onChange={(e) => {
-                      setFecha(e.target.value)
-                      setHora('')
-                    }}
+                    onChange={(e) => cambiarSeleccion(() => setFecha(e.target.value))}
                     className="w-full rounded-xl border border-white/15 bg-[#f7f4ee] px-4 py-3 text-azul font-semibold shadow-sm focus:border-rojo focus:ring-1 focus:ring-rojo/30"
                   />
                 </div>
@@ -445,7 +440,24 @@ export default function Reserva() {
                       Horarios disponibles para {formatearFecha(fecha)}:
                     </p>
 
-                    {cargandoHoras ? (
+                    {errorHoras ? (
+                      <p role="alert" className="mt-3 text-sm text-stone-200">
+                        {errorHoras}{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setErrorHoras('')
+                            setHorasCargadas({ clave: '', horas: [] }) // así se ve "Buscando horas libres…"
+                            setRecarga((n) => n + 1)
+                          }}
+                          className="font-semibold underline"
+                        >
+                          Reintentar
+                        </button>
+                      </p>
+                    ) : !clave ? (
+                      <p className="mt-3 text-sm text-stone-400">Elige servicio y barbero para ver las horas libres.</p>
+                    ) : cargandoHoras ? (
                       <p className="mt-3 text-sm text-stone-400 animate-pulse">
                         Buscando horas libres…
                       </p>
@@ -462,7 +474,10 @@ export default function Reserva() {
                               key={h}
                               type="button"
                               aria-pressed={seleccionada}
-                              onClick={() => setHora(h)}
+                              onClick={() => {
+                                setHora(h)
+                                setError('')
+                              }}
                               className={`h-11 rounded-xl border text-center text-sm font-bold transition-all ${
                                 seleccionada
                                   ? 'border-rojo bg-rojo text-[#f7f4ee] shadow-md shadow-black/30 scale-105'
@@ -512,7 +527,8 @@ export default function Reserva() {
                       type="tel"
                       required
                       placeholder="+56 9 1234 5678"
-                      pattern="\+?[0-9 ]{8,16}"
+                      pattern="\+?[0-9 \(\)\-]{8,20}"
+                      title="Ej: +56 9 1234 5678 (números, espacios, guiones o paréntesis)"
                       autoComplete="tel"
                       value={telefono}
                       onChange={(e) => setTelefono(e.target.value)}

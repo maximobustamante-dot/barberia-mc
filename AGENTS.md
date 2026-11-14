@@ -7,7 +7,7 @@ y para personas nuevas en el equipo.
 
 Página web de **una barbería genérica** ("Barbería", Providencia, Santiago) hecha como **muestra de
 portafolio** para vender páginas a pymes chilenas. No es de un cliente real: los nombres, precios y
-textos son de ejemplo y se cambian en `src/data/`.
+textos son de ejemplo y se cambian en `src/modelos/datos/`.
 
 Tiene tres partes:
 
@@ -47,27 +47,34 @@ Tiene tres partes:
 index.html                  Metadatos SEO, fuentes de Google, raíz de React
 vercel.json                 Para que /admin funcione al publicar en Vercel
 public/                     Imágenes y robots.txt (fotos reales pendientes)
-src/
+src/                        Organizado en Modelo · Vista · Controlador (ver docs/ARQUITECTURA.md)
   main.tsx                  Arranca React con el router
-  Rutas.tsx                 Qué página se muestra en cada dirección
-  App.tsx                   Página pública: ordena las secciones
+  Rutas.tsx                 Qué vista se muestra en cada dirección
   index.css                 Paleta y fuentes (@theme)
-  types.ts                  Tipos de Negocio, Servicio, Barbero
-  data/                     Contenido editable: negocio.ts, servicios.ts, barberos.ts
-  lib/supabase.ts           Cliente de Supabase (null si falta .env.local; frena la clave secreta)
-  lib/horario.ts            "Abierto ahora / Abre mañana" en hora de Chile
-  lib/telefono.ts           Normaliza y formatea teléfonos chilenos
-  components/               Secciones de la página pública
-    Reserva.tsx             Formulario de reserva conectado a Supabase
-  paginas/                  Privacidad y 404
-  admin/                    Panel del dueño (se carga solo al entrar a /admin)
-    Admin.tsx               Decide qué mostrar: cargando / login / sin permiso / panel
-    Login.tsx               Formulario de correo y contraseña
-    Panel.tsx               Resumen, filtros y lista de reservas (recibe una "fuente" de datos)
-    fuente.ts               Fuente Supabase (panel real) y fuente demo (datos inventados en memoria)
-    Demo.tsx                /admin/demo: el panel con la fuente demo, sin login
-    TarjetaReserva.tsx      Una reserva con sus botones de acción
-    util.ts                 Fechas en hora de Chile, estados, enlace de WhatsApp
+  modelos/                  MODELO: datos y reglas. Sin React ni HTML.
+    tipos.ts                Forma de cada dato (Servicio, Barbero, ReservaAdmin, Estado…)
+    datos/                  Contenido editable: negocio.ts, servicios.ts, barberos.ts
+    supabase.ts             Cliente de Supabase (null si falta .env.local; frena la clave secreta)
+    reservas.ts             Reserva pública: catálogo, horas libres, crear reserva
+    sesion.ts               Login del dueño: entrar, salir, ¿es admin?
+    panel.ts                Reservas del panel: fuente real (Supabase) y fuente demo
+    fechas.ts               Fechas en hora de Chile
+    horario.ts              "Abierto ahora" y horario de cada día (negocio.apertura)
+    telefono.ts             Normaliza, limpia, valida y formatea teléfonos chilenos
+    enlaces.ts              Enlaces de WhatsApp e Instagram
+    formato.ts              Pesos y fecha corta
+  controladores/            CONTROLADOR: hooks que unen modelo y vista
+    useReserva.ts           Estado y acciones del formulario de reserva
+    useSesionAdmin.ts       Qué pantalla de /admin mostrar (login, sin permiso, panel…)
+    useLogin.ts             Formulario de login
+    usePanel.ts             Rango de fechas, filtros, resumen y acciones del panel; useFuenteDemo
+    mensajes.ts             Texto para cada código de error del modelo
+    pedirReserva.ts         "Reservar este" desde las tarjetas hacia el formulario
+  vistas/                   VISTA: componentes que solo dibujan
+    publica/                Página "/": App.tsx ordena Navbar, Hero, Servicios, Reserva…
+    admin/                  Admin, Login, Panel, TarjetaReserva, Demo (se cargan solo en /admin)
+    paginas/                Privacidad y 404
+    comunes/                IconoTijeras, IconoWhatsApp
 supabase/
   schema.sql                Etapa 1: tablas, seguridad, reservas sin cuenta
   migraciones/              Cambios posteriores, se corren en orden
@@ -121,13 +128,23 @@ Tablas: `barberos`, `servicios`, `horarios` (por barbero y día de la semana), `
   publicable sí puede ir en el navegador (está protegida por RLS), pero vive en `.env.local`.
 - Si una función nueva expone datos, la verificación de permisos va **en SQL** (`es_admin()`),
   no solo en React.
-- Fechas y horas de reservas siempre en zona `America/Santiago` (ver `src/admin/util.ts`).
+- **MVC** (detalle en `docs/ARQUITECTURA.md`):
+  - `modelos/` no importa React ni nada de `vistas/` o `controladores/`. Devuelve datos o
+    códigos de error (`'HORA_NO_DISPONIBLE'`), nunca textos para la pantalla.
+  - `controladores/` guarda el estado (`useState`), llama al modelo y traduce los códigos con
+    `mensajes.ts`. No devuelve JSX.
+  - `vistas/` dibuja lo que le da su controlador. **Nunca** importa `modelos/supabase.ts`.
+    Puede leer datos fijos (`modelos/datos/`) y funciones de formato (`pesos`, `fechaLarga`).
+    Estado puramente visual (menú abierto, foto que no cargó) puede quedarse en la vista.
+- Fechas y horas siempre en zona `America/Santiago`: usa `src/modelos/fechas.ts` (nunca `new Date()`
+  con la hora del computador del visitante). El horario de atención se lee con
+  `aperturaDeFecha()` de `src/modelos/horario.ts`.
 - Mantener los textos cortos y en es-CL. Precios con `toLocaleString('es-CL')`.
 - Antes de subir: `npm run lint`, `npm test` y `npm run build` sin errores (la CI los repite).
 - Si agregas una función SQL o cambias permisos, agrega su prueba en `supabase/verificar.sql`
   (lista `pruebas`: grupo, descripción, rol, consulta, resultado esperado) y córrelo.
-- Si el panel necesita una acción nueva, agrégala a `FuenteReservas` en `src/admin/fuente.ts`
-  en las dos fuentes (Supabase y demo).
+- Si el panel necesita una acción nueva, agrégala a `FuenteReservas` en `src/modelos/panel.ts`
+  en las dos fuentes (Supabase y demo), y después a `usePanel`.
 - `vercel.json` trae cabeceras de seguridad (CSP). Si agregas un servicio externo (otro mapa,
   analytics, imágenes de otro dominio), hay que permitirlo ahí o el navegador lo bloquea.
 
@@ -136,19 +153,22 @@ Tablas: `barberos`, `servicios`, `horarios` (por barbero y día de la semana), `
 - Los colores en `index.css` se llaman `azul`, `azul-claro`, `hueso`, `rojo` por la paleta original,
   pero desde el rediseño `azul` es **carbón** (#121316) y `azul-claro` es **piedra**. Los nombres se
   mantuvieron para no romper las clases existentes.
-- Servicios y barberos están **dos veces**: en `src/data/` (lo que muestra la página) y en la base
+- Servicios y barberos están **dos veces**: en `src/modelos/datos/` (lo que muestra la página) y en la base
   (lo que usa la reserva). Si cambias uno, cambia el otro. Los `id` deben coincidir:
   `TarjetaServicio` y `TarjetaBarbero` mandan el `id` al formulario de reserva.
 - El horario está en `negocio.ts` dos veces (`horario` para mostrar, `apertura` para calcular) y
   en la tabla `horarios` de Supabase. Si cambia, hay que cambiar los tres.
-- La insignia "Más pedido" se activa con `destacado: true` en `src/data/servicios.ts`.
+- La insignia "Más pedido" se activa con `destacado: true` en `src/modelos/datos/servicios.ts`, y el
+  filtro donde aparece cada servicio con `categoria` (`cortes`, `barba` o `detalles`).
 - Faltan las fotos reales: `public/nosotros.jpg` y `public/barberos/{matias,javier,diego}.jpg`.
-  Mientras tanto se ve un respaldo con iniciales.
-- `src/paginas/Privacidad.tsx` es un texto de ejemplo; revisarlo con cada cliente real.
+  Mientras tanto se ve un respaldo con iniciales. `public/image.png` no se usa: si su licencia
+  lo permite puede ser la foto de Nosotros; si no, hay que borrarla.
+- `og:image` en `index.html` es una ruta relativa; al publicar hay que poner la URL completa.
+- `src/vistas/paginas/Privacidad.tsx` es un texto de ejemplo; revisarlo con cada cliente real.
 - `/admin/demo` y el link "Ver demo del panel" del login son para el portafolio: quitarlos en
   la página de un cliente real.
 - El plan gratuito de Supabase pausa el proyecto tras 7 días sin uso; la demo del panel sigue
-  funcionando, la reserva pública no.
+  funcionando y la reserva pública muestra el botón de WhatsApp hasta reactivarlo.
 
 ## Pendientes / ideas
 
@@ -164,10 +184,24 @@ Tablas: `barberos`, `servicios`, `horarios` (por barbero y día de la semana), `
 
 ## Agentes revisores
 
-En `.claude/agents/` hay dos agentes que **solo aconsejan, no programan**:
+En `.claude/agents/` hay tres agentes que **solo aconsejan, no programan**:
 
+- `revisor-codigo.md`: errores, código de más y cosas que no deberían estar en el repo.
 - `revisor-seguridad.md`: login, panel, RLS y funciones SQL.
 - `revisor-diseno.md`: diseño, móvil y accesibilidad.
 
-En Claude Code se usan pidiendo "usa el agente revisor-seguridad". En otro asistente, copia el
+En Claude Code se usan pidiendo "usa el agente revisor-codigo". En otro asistente, copia el
 contenido del archivo como instrucciones.
+
+### Ciclo de revisión (antes de cada Pull Request)
+
+1. Pide al `revisor-codigo` que revise la rama. Devuelve hallazgos numerados (`R1-01`…) y un
+   veredicto.
+2. El programador corrige lo Crítico, Alto y Medio (o anota por qué no lo cambia) y corre
+   `npm run lint`, `npm test` y `npm run build`.
+3. Vuelve a llamar al revisor pasándole el informe anterior: marca qué quedó resuelto y busca
+   problemas nuevos.
+4. Se repite hasta `VEREDICTO: APROBADO`. El historial queda en `docs/REVISION.md`.
+
+Ejemplo de pedido: *"Haz un ciclo de revisión con el agente revisor-codigo hasta que apruebe; el
+agente solo indica y tú corriges."*

@@ -3,14 +3,14 @@
 Qué se probó del proyecto, cómo y con qué resultado. Fecha de la última corrida completa:
 **12 de noviembre de 2026** (rama `login-dashboard`).
 
-**Resumen:** 39 pruebas de seguridad de la base, 25 pruebas unitarias y 34 comprobaciones de
+**Resumen:** 39 pruebas de seguridad de la base, 35 pruebas unitarias y 34 comprobaciones de
 punta a punta en el navegador. **Todas pasaron.** Durante las pruebas apareció un solo error, y era
 del entorno de prueba, no del proyecto (ver [Hallazgos](#hallazgos)).
 
 | Capa | Herramienta | Pruebas | Resultado | Cómo repetirlas |
 |---|---|---|---|---|
 | Base de datos y permisos | SQL (`supabase/verificar.sql`) | 39 | ✅ 39/39 | SQL Editor de Supabase o `bash supabase/pruebas/correr.sh` |
-| Lógica de la página | Vitest | 25 | ✅ 25/25 | `npm test` |
+| Lógica de la página | Vitest | 35 | ✅ 35/35 | `npm test` |
 | Conexión página ↔ Supabase | `scripts/verificar-conexion.mjs` | 15 + 4 opcionales | ✅ | `npm run verificar` |
 | De punta a punta (navegador) | Playwright | 34 | ✅ 34/34 | Manual (ver [más abajo](#4-de-punta-a-punta-en-el-navegador)) |
 | Calidad de código | TypeScript + oxlint + build | — | ✅ sin errores | `npm run lint` · `npm run build` |
@@ -84,14 +84,17 @@ proyecto hay que correrlo una vez** (ver [Pendiente](#pendiente-verificar-en-el-
 
 ## 2. Pruebas unitarias (Vitest)
 
-`npm test` corre 25 pruebas en 4 archivos:
+`npm test` corre 35 pruebas en 7 archivos:
 
 | Archivo | Qué comprueba |
 |---|---|
-| `src/lib/telefono.test.ts` | `+56 9 1234 5678`, `56912345678`, `9 1234 5678` y `+56 (9) 1234-5678` quedan iguales (igual que `normalizar_telefono` en SQL). Formato para mostrar. |
-| `src/lib/horario.test.ts` | "Abierto ahora / Abre mañana / Abre el lunes" en hora de Chile, incluyendo el cierre exacto (20:00), el sábado y el domingo. |
-| `src/admin/util.test.ts` | Conversión hora de Chile → UTC en verano (UTC-3) y en invierno (UTC-4). Una reserva a las 23:30 sigue siendo de ese día. Suma de días entre meses y años. Lunes de la semana. Enlace de WhatsApp. Mensajes de error. |
-| `src/admin/fuente.test.ts` | La demo del panel no genera reservas el domingo, nunca cruza dos reservas del mismo barbero, genera siempre los mismos datos y guarda los cambios de estado. |
+| `src/modelos/telefono.test.ts` | `+56 9 1234 5678`, `56912345678`, `9 1234 5678` y `+56 (9) 1234-5678` quedan iguales (igual que `normalizar_telefono` en SQL). Formato para mostrar. Guiones y paréntesis se limpian para que la base acepte el número. |
+| `src/modelos/horario.test.ts` | "Abierto ahora / Abre mañana / Abre el lunes" en hora de Chile, incluyendo el cierre exacto (20:00), el sábado y el domingo. |
+| `src/modelos/fechas.test.ts` | Conversión hora de Chile → UTC en verano (UTC-3) y en invierno (UTC-4). Una reserva a las 23:30 sigue siendo de ese día. Suma de días entre meses y años. Lunes de la semana. |
+| `src/modelos/enlaces.test.ts` | Enlaces de WhatsApp del local (con y sin mensaje), de Instagram y del cliente (número normalizado y mensaje con la hora en Chile). |
+| `src/modelos/formato.test.ts` | Pesos chilenos, fecha corta y cómo se saca el código de error que lanza cada función SQL. |
+| `src/controladores/mensajes.test.ts` | Cada código de error del modelo tiene su texto; el login no revela si falló el correo o la contraseña. |
+| `src/modelos/panel.test.ts` | La demo del panel no genera reservas el domingo, nunca cruza dos reservas del mismo barbero, genera siempre los mismos datos y guarda los cambios de estado. |
 
 ---
 
@@ -102,7 +105,7 @@ cambia nada en la base. Revisa:
 
 1. `.env.local` tiene la URL correcta y la clave **publicable** (detecta si alguien pegó la secreta).
 2. El registro de usuarios nuevos está cerrado y el inicio de sesión anónimo está apagado.
-3. Servicios y barberos de la base coinciden con `src/data/`. Es la deuda conocida de tener los
+3. Servicios y barberos de la base coinciden con `src/modelos/datos/`. Es la deuda conocida de tener los
    datos en dos lugares.
 4. El público puede consultar horas libres.
 5. El público **no** puede leer reservas, horarios ni administradores, cambiar precios ni usar
@@ -115,7 +118,7 @@ cambia nada en la base. Revisa:
 
 - Con todo en orden: todo ✅.
 - Con el registro abierto: ❌ con el paso para cerrarlo.
-- Con un precio distinto en `src/data/servicios.ts`: ❌ que dice qué servicio difiere.
+- Con un precio distinto en `src/modelos/datos/servicios.ts`: ❌ que dice qué servicio difiere.
 - Con la URL terminada en `/rest/v1/` y la clave secreta: ❌ en ambos.
 - El login del dueño: 4/4 ✅.
 
@@ -173,7 +176,7 @@ aplicaron en el commit "Aplica revisión de seguridad y de diseño".
 |---|---|---|
 | "undefined minutos" en el resumen de la reserva durante las pruebas | Error del **servidor de prueba**: no respetaba el alias `duracionMin:duracion_min`, que Supabase sí respeta | Corregido en el entorno de prueba. La página no tenía el error. |
 | Un caso de prueba de horario esperaba "Abierto" a las 09:00 | Error en la **prueba** | Corregido |
-| El plan gratuito de Supabase **pausa el proyecto tras 7 días sin uso** | Riesgo para la demo pública | Mitigado: `/admin/demo` funciona sin Supabase. La reserva pública mostraría un error hasta reactivar el proyecto. |
+| El plan gratuito de Supabase **pausa el proyecto tras 7 días sin uso** | Riesgo para la demo pública | Mitigado: `/admin/demo` funciona sin Supabase, y si la reserva no puede cargar servicios o barberos muestra el botón de WhatsApp en vez de quedarse cargando. |
 
 ## Límites de estas pruebas
 

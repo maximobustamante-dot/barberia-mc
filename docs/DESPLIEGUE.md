@@ -41,6 +41,9 @@ En Supabase, ve a **Authentication → URL Configuration**:
 - [ ] Abre `/admin/demo`: debe mostrar datos inventados.
 - [ ] Borra la reserva de prueba.
 - [ ] Pega el link en el README, en la línea "Demo en vivo".
+- [ ] En `index.html`, cambia `og:image` por la URL completa de una imagen .jpg de unos
+      1200×630 (`https://tu-dominio/compartir.jpg`). WhatsApp, Facebook y LinkedIn necesitan la
+      URL completa para mostrar la foto al compartir el link.
 
 Cada vez que hagas merge a `main`, Vercel vuelve a publicar solo.
 Cada Pull Request también recibe un link de vista previa.
@@ -48,7 +51,8 @@ Cada Pull Request también recibe un link de vista previa.
 ## Cosas a saber
 
 - **El plan gratuito de Supabase pausa el proyecto tras 7 días sin actividad.** Si un reclutador
-  abre la demo y la reserva da error, es eso. Se reactiva en Supabase → *Restore project*.
+  abre la demo y la reserva muestra "Reserva tu hora por WhatsApp" en vez del formulario, es eso.
+  Se reactiva en Supabase → *Restore project*.
   `/admin/demo` funciona siempre, porque no usa Supabase.
 - Si agregas un servicio externo (analytics, otro mapa, imágenes de otro dominio), permítelo en
   la `Content-Security-Policy` de `vercel.json`. Si no, el navegador lo bloquea.

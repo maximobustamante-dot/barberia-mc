@@ -1,7 +1,7 @@
+import { diaDe, fechaLarga, horaDe } from '../lib/fechas'
 import { normalizarTelefono } from '../lib/telefono'
 
-// Funciones de apoyo del panel. Todo se calcula en hora de Chile,
-// aunque el computador del dueño tenga otra zona horaria.
+// Funciones de apoyo del panel: tipos de las reservas, estados, WhatsApp y mensajes de error.
 
 export type Estado = 'pendiente' | 'confirmada' | 'atendida' | 'no_asistio' | 'cancelada'
 
@@ -21,61 +21,8 @@ export interface ReservaAdmin {
   creada_en: string
 }
 
-const ZONA = 'America/Santiago'
-
-// 'en-CA' formatea como yyyy-mm-dd, que es el formato de <input type="date">
-const formatoDia = new Intl.DateTimeFormat('en-CA', { timeZone: ZONA })
-const formatoHora = new Intl.DateTimeFormat('es-CL', {
-  timeZone: ZONA,
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-})
-const formatoLargo = new Intl.DateTimeFormat('es-CL', {
-  timeZone: 'UTC',
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-})
-
-export const hoyChile = () => formatoDia.format(new Date())
-export const diaDe = (instante: string) => formatoDia.format(new Date(instante))
-export const horaDe = (instante: string) => formatoHora.format(new Date(instante))
-
-// '2026-11-16' → 'lunes 16 de noviembre'
-export const fechaLarga = (dia: string) => formatoLargo.format(new Date(`${dia}T12:00:00Z`))
-
-// '2026-11-16' + '10:30' en hora de Chile → instante ISO en UTC ('2026-11-16T13:30:00.000Z').
-// Chile cambia entre UTC-3 y UTC-4 según la época del año; Intl sabe cuál corresponde.
-const formatoPartes = new Intl.DateTimeFormat('en-US', {
-  timeZone: ZONA,
-  hourCycle: 'h23',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-export function instanteChile(dia: string, hora: string) {
-  const supuesto = new Date(`${dia}T${hora}:00Z`).getTime()
-  const p = Object.fromEntries(formatoPartes.formatToParts(supuesto).map((x) => [x.type, x.value]))
-  const relojChile = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute)
-  return new Date(supuesto - (relojChile - supuesto)).toISOString()
-}
-
-// Suma (o resta) días a una fecha yyyy-mm-dd
-export function sumarDias(dia: string, n: number) {
-  const d = new Date(`${dia}T12:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
-}
-
-// Lunes de la semana de esa fecha
-export function lunesDe(dia: string) {
-  const d = new Date(`${dia}T12:00:00Z`)
-  const atras = (d.getUTCDay() + 6) % 7 // domingo=0 → 6 días atrás
-  return sumarDias(dia, -atras)
-}
+// Las fechas se calculan en src/lib/fechas.ts; se reexportan aquí para el panel
+export { diaDe, fechaLarga, horaDe, hoyChile, instanteChile, lunesDe, sumarDias } from '../lib/fechas'
 
 export const pesos = (n: number) => `$${n.toLocaleString('es-CL')}`
 

@@ -87,15 +87,21 @@ mismo segundo.
 - Registro público desactivado.
 - La página se niega a arrancar si alguien pega la clave secreta en lugar de la publicable.
 
+**Código separado en Modelo, Vista y Controlador.**
+
+- Las vistas solo dibujan, los hooks (`useReserva`, `usePanel`) guardan el estado y los modelos
+  hablan con Supabase.
+- Así se puede cambiar el diseño sin tocar la lógica, y probar las reglas sin abrir un navegador.
+
 **Demo del panel sin publicar contraseñas.**
 
 - `/admin/demo` usa el mismo componente del panel con una fuente de datos inventada
-  (`src/admin/fuente.ts`).
+  (`src/modelos/panel.ts`).
 - Quien revise el proyecto puede probar el panel completo sin cuenta y sin tocar la base real.
 
 ## Pruebas
 
-**39 pruebas de seguridad de la base, 25 pruebas unitarias y 34 comprobaciones de punta a punta
+**39 pruebas de seguridad de la base, 35 pruebas unitarias y 34 comprobaciones de punta a punta
 en el navegador, todas pasando.** El detalle de qué se probó y cómo está en
 [docs/PRUEBAS.md](docs/PRUEBAS.md).
 
@@ -133,18 +139,20 @@ Para publicar en Vercel: [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
 
 ## Estructura
 
+El código está organizado en **Modelo · Vista · Controlador**
+([docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)):
+
 ```
 src/
-  components/   secciones de la página pública (Hero, Servicios, Reserva…)
-  admin/        panel del dueño: login, panel, demo y fuente de datos
-  data/         contenido editable: negocio, servicios, barberos
-  lib/          cliente de Supabase, horario y teléfonos
+  modelos/        datos y reglas: tipos, datos del local, Supabase, fechas, teléfonos
+  controladores/  hooks que guardan el estado y unen modelo y vista (useReserva, usePanel…)
+  vistas/         componentes que solo dibujan: publica/, admin/, paginas/, comunes/
 supabase/
   schema.sql    tablas, seguridad y reservas (etapa 1)
   migraciones/  login, panel y frenos contra abuso (etapa 2)
   verificar.sql pruebas de seguridad para correr en Supabase
 scripts/        verificar-conexion.mjs (npm run verificar)
-docs/           informe de pruebas, despliegue y capturas
+docs/           arquitectura, informe de pruebas, revisión, despliegue y capturas
 ```
 
 El contexto completo para trabajar en el código (reglas, base de datos, deuda conocida) está en

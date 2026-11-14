@@ -5,7 +5,7 @@
 // que la app esté bien conectada a Supabase y que la seguridad funcione:
 //   - .env.local tiene la URL y la clave publicable (no la secreta)
 //   - el registro de usuarios nuevos está cerrado
-//   - servicios y barberos de la base coinciden con src/data/
+//   - servicios y barberos de la base coinciden con src/modelos/datos/
 //   - el público puede ver horas libres pero NO puede leer reservas ni usar el panel
 //   - (opcional) tu usuario de dueño entra y ve el panel
 //
@@ -77,11 +77,11 @@ try {
 // ---------------------------------------------------------------------
 console.log('\n· Base de datos vista por el público')
 
-// Datos que muestra la página (src/data). Node 22.18+ entiende TypeScript simple;
+// Datos que muestra la página (src/modelos/datos). Node 22.18+ entiende TypeScript simple;
 // si tu versión no puede, esta comparación se salta.
 async function datosDeLaPagina(archivo, nombre) {
   try {
-    return (await import(new URL(`../src/data/${archivo}`, import.meta.url)))[nombre]
+    return (await import(new URL(`../src/modelos/datos/${archivo}`, import.meta.url)))[nombre]
   } catch {
     return null
   }
@@ -99,14 +99,14 @@ if (pagServicios && servicios) {
     const b = servicios.find((s) => s.id === p.id)
     return !b || b.nombre !== p.nombre || b.precio !== p.precio || b.duracion_min !== p.duracionMin
   })
-  anotar(distintos.length === 0, 'Servicios de la base = src/data/servicios.ts',
+  anotar(distintos.length === 0, 'Servicios de la base = src/modelos/datos/servicios.ts',
     distintos.length ? `distintos: ${distintos.map((d) => `${d.id} ${d.nombre}`).join(', ')}` : '')
 } else {
-  anotar(null, 'Servicios de la base = src/data/servicios.ts', 'no se pudo comparar (actualiza Node a 22.18 o más)')
+  anotar(null, 'Servicios de la base = src/modelos/datos/servicios.ts', 'no se pudo comparar (actualiza Node a 22.18 o más)')
 }
 if (pagBarberos && barberos) {
   const distintos = pagBarberos.filter((p) => barberos.find((b) => b.id === p.id)?.nombre !== p.nombre)
-  anotar(distintos.length === 0, 'Barberos de la base = src/data/barberos.ts',
+  anotar(distintos.length === 0, 'Barberos de la base = src/modelos/datos/barberos.ts',
     distintos.length ? `distintos: ${distintos.map((d) => `${d.id} ${d.nombre}`).join(', ')}` : '')
 }
 

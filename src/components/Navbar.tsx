@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { negocio } from '../data/negocio'
+import IconoTijeras from './IconoTijeras'
 
 const enlaces = [
   { href: '#nosotros', texto: 'Nosotros' },
@@ -10,30 +11,29 @@ const enlaces = [
 
 export default function Navbar() {
   const [abierto, setAbierto] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
+  const [conScroll, setConScroll] = useState(false)
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20)
-    }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
+    // 'scroll' y 'keydown' son eventos del navegador; los nombres de las funciones son nuestros
+    const alHacerScroll = () => setConScroll(window.scrollY > 20)
+    window.addEventListener('scroll', alHacerScroll)
+    return () => window.removeEventListener('scroll', alHacerScroll)
   }, [])
 
   // Cerrar menú con tecla Escape
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const alApretarTecla = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setAbierto(false)
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', alApretarTecla)
+    return () => window.removeEventListener('keydown', alApretarTecla)
   }, [])
 
   return (
     <>
       <header
         className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-          scrolled
+          conScroll
             ? 'bg-azul/95 py-3 shadow-xl backdrop-blur-md border-b border-white/10'
             : 'bg-azul/80 py-5 backdrop-blur-sm'
         } text-white`}
@@ -45,22 +45,7 @@ export default function Navbar() {
           >
             {/* Isotipo tijeras / navaja de barbería */}
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-rojo text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
-              <svg
-                className="h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="6" cy="6" r="3" />
-                <path d="M8.12 8.12 12 12" />
-                <path d="M20 4 8.12 15.88" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M14.8 14.8 20 20" />
-              </svg>
+              <IconoTijeras className="h-5 w-5" />
             </span>
             <span>{negocio.nombre}</span>
           </a>
@@ -120,7 +105,9 @@ export default function Navbar() {
         />
       )}
 
+      {/* inert (atributo del navegador): cerrado, el menú no recibe foco con Tab ni lo lee un lector de pantalla */}
       <div
+        inert={!abierto}
         className={`fixed inset-x-4 top-20 z-50 origin-top rounded-2xl border border-white/10 bg-azul/95 p-6 shadow-2xl backdrop-blur-xl transition-all duration-300 md:hidden ${
           abierto
             ? 'scale-100 opacity-100 pointer-events-auto'

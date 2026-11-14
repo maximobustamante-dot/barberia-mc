@@ -1,13 +1,13 @@
 import { Suspense, lazy } from 'react'
 import { Route, Routes } from 'react-router'
-import App from './App.tsx'
-import Privacidad from './paginas/Privacidad.tsx'
-import NoEncontrada from './paginas/NoEncontrada.tsx'
+import App from './vistas/publica/App.tsx'
+import Privacidad from './vistas/paginas/Privacidad.tsx'
+import NoEncontrada from './vistas/paginas/NoEncontrada.tsx'
 
 // El panel se descarga solo cuando alguien entra a /admin,
 // así los clientes no cargan código que no usan.
-const Admin = lazy(() => import('./admin/Admin.tsx'))
-const Demo = lazy(() => import('./admin/Demo.tsx'))
+const Admin = lazy(() => import('./vistas/admin/Admin.tsx'))
+const Demo = lazy(() => import('./vistas/admin/Demo.tsx'))
 const cargando = <div className="grid min-h-screen place-items-center">Cargando…</div>
 
 // Qué componente se muestra según la dirección (URL)

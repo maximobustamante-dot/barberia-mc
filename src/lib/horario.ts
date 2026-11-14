@@ -1,4 +1,5 @@
 import { negocio } from '../data/negocio'
+import { ZONA } from './fechas'
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -6,7 +7,7 @@ const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', '
 // (aunque el visitante tenga otra zona horaria en su computador)
 function ahoraEnChile(fecha: Date) {
   const partes = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Santiago',
+    timeZone: ZONA,
     weekday: 'short',
     hour: '2-digit',
     minute: '2-digit',
@@ -17,12 +18,16 @@ function ahoraEnChile(fecha: Date) {
   return { dia, minutos: Number(valor('hour')) * 60 + Number(valor('minute')) }
 }
 
-const aMinutos = (hhmm: string) => {
+export const aMinutos = (hhmm: string) => {
   const [h, m] = hhmm.split(':').map(Number)
   return h * 60 + m
 }
 
+// Horario de un día de la semana (0 = domingo) según negocio.apertura; undefined = cerrado
 const aperturaDel = (dia: number) => negocio.apertura.find((a) => a.dias.includes(dia))
+
+// Horario de una fecha 'yyyy-mm-dd'; undefined si ese día el local está cerrado
+export const aperturaDeFecha = (fecha: string) => aperturaDel(new Date(`${fecha}T12:00:00Z`).getUTCDay())
 
 // ¿Está abierto ahora? Si no, cuándo abre.
 export function estadoHorario(fecha = new Date()) {

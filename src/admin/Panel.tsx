@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { negocio } from '../data/negocio'
 import { barberos } from '../data/barberos'
+import { aperturaDeFecha } from '../lib/horario'
 import TarjetaReserva from './TarjetaReserva'
 import type { FuenteReservas } from './fuente'
 import {
@@ -30,26 +31,28 @@ export default function Panel({ email, fuente, demo = false }: Props) {
   const [verCanceladas, setVerCanceladas] = useState(false)
 
   const [recarga, setRecarga] = useState(0) // al aumentar, vuelve a pedir las reservas
-  const [cargadas, setCargadas] = useState({ clave: '', filas: [] as ReservaAdmin[], error: '' })
+  const [cargadas, setCargadas] = useState({ clave: '', rango: '', filas: [] as ReservaAdmin[], error: '' })
   const [ocupada, setOcupada] = useState<string | null>(null) // reserva que se está actualizando
   const [aviso, setAviso] = useState('')
 
   // Rango de fechas que se muestra
   const desde = vista === 'dia' ? fecha : lunesDe(fecha)
   const hasta = vista === 'dia' ? fecha : sumarDias(desde, 6)
-  const clave = `${desde}_${hasta}_${recarga}`
-  const cargando = cargadas.clave !== clave
+  const rango = `${desde}_${hasta}`
+  const clave = `${rango}_${recarga}`
+  const cargando = cargadas.clave !== clave // hay una petición en curso (también al refrescar)
+  const nuevoRango = cargadas.rango !== rango // cambió la fecha o la vista y aún no llegan sus reservas
 
   // 1. Pedir las reservas del rango a la base de datos
   useEffect(() => {
     let vigente = true // si cambia la fecha antes de que llegue la respuesta, se ignora
     fuente.cargar(desde, hasta).then(({ filas, error }) => {
-      if (vigente) setCargadas({ clave, filas, error })
+      if (vigente) setCargadas({ clave, rango, filas, error })
     })
     return () => {
       vigente = false
     }
-  }, [clave, desde, hasta, fuente])
+  }, [clave, rango, desde, hasta, fuente])
 
   // 2. Actualizar solo: al volver a la pestaña y cada 2 minutos
   useEffect(() => {
@@ -73,7 +76,9 @@ export default function Panel({ email, fuente, demo = false }: Props) {
   }
 
   // Filtros y números del resumen
-  const filas = cargadas.filas
+  // Al cambiar de fecha no se muestran los números del rango anterior; al refrescar los mismos
+  // días (tras una acción, cada 2 min o al volver a la pestaña) la lista se queda donde está
+  const filas = nuevoRango ? [] : cargadas.filas
   const delBarbero = filas.filter((r) => barbero === 'todos' || r.barbero_id === barbero)
   const activas = delBarbero.filter((r) => r.estado !== 'cancelada')
   const visibles = verCanceladas ? delBarbero : activas
@@ -221,7 +226,7 @@ export default function Panel({ email, fuente, demo = false }: Props) {
         {/* Reservas agrupadas por día */}
         <div className="mt-6 space-y-8" aria-busy={cargando}>
           {vista === 'dia' ? (
-            <ListaDia reservas={porDia[0].reservas} vacio={textoVacio(fecha, cargando)} ocupada={ocupada} onCambiar={cambiar} />
+            <ListaDia reservas={porDia[0].reservas} vacio={textoVacio(fecha, nuevoRango)} ocupada={ocupada} onCambiar={cambiar} />
           ) : (
             <>
               {porDia
@@ -236,7 +241,7 @@ export default function Panel({ email, fuente, demo = false }: Props) {
                 ))}
               {porDia.some((d) => d.reservas.length === 0) && (
                 <p className="rounded-2xl border border-dashed border-azul/20 px-4 py-4 text-sm text-azul/70">
-                  {cargando ? 'Cargando reservas…' : (
+                  {nuevoRango ? 'Cargando reservas…' : (
                     <>
                       <strong className="font-semibold">Sin reservas:</strong>{' '}
                       {porDia
@@ -255,18 +260,18 @@ export default function Panel({ email, fuente, demo = false }: Props) {
   )
 }
 
-// Domingo cerrado (según el horario de la tabla horarios del ejemplo)
-const esDomingo = (dia: string) => new Date(`${dia}T12:00:00Z`).getUTCDay() === 0
+// Día sin atención según negocio.apertura (src/data/negocio.ts)
+const cerrado = (dia: string) => !aperturaDeFecha(dia)
 
 function textoVacio(dia: string, cargando: boolean) {
   if (cargando) return 'Cargando reservas…'
-  return esDomingo(dia) ? 'Domingo: el local está cerrado.' : 'Sin reservas.'
+  return cerrado(dia) ? 'El local no atiende este día.' : 'Sin reservas.'
 }
 
-// 'lunes 16 de noviembre' → 'lun 16' (domingo marcado como cerrado)
+// 'lunes 16 de noviembre' → 'lun 16' (los días sin atención se marcan como cerrados)
 function textoCorto(dia: string) {
   const [nombre, numero] = fechaLarga(dia).replace(',', '').split(' ')
-  return `${nombre.slice(0, 3)} ${numero ?? ''}${esDomingo(dia) ? ' (cerrado)' : ''}`.trim()
+  return `${nombre.slice(0, 3)} ${numero ?? ''}${cerrado(dia) ? ' (cerrado)' : ''}`.trim()
 }
 
 interface ListaDiaProps {

@@ -1,6 +1,6 @@
 ---
 name: revisor-seguridad
-description: Revisa la seguridad del login, el panel y la base de datos (Supabase, RLS, funciones SQL). Solo da indicaciones; nunca modifica archivos. Úsalo después de tocar src/admin/, src/lib/supabase.ts o supabase/.
+description: Revisa la seguridad del login, el panel y la base de datos (Supabase, RLS, funciones SQL). Solo da indicaciones; nunca modifica archivos. Úsalo después de tocar src/modelos/ (sesion, panel, reservas, supabase), src/controladores/, src/vistas/admin/ o supabase/.
 tools: Read, Grep, Glob
 ---
 
@@ -21,7 +21,7 @@ Lee primero `AGENTS.md` en la raíz para entender el proyecto.
    - Funciones `security definer`: con `set search_path`, validan permisos (`es_admin()`) antes de
      hacer algo, validan sus parámetros y no devuelven datos de más.
    - `grant execute` solo a los roles que corresponde; las de administrador sin `anon`.
-2. **Login y sesión** (`src/admin/`)
+2. **Login y sesión** (`src/modelos/sesion.ts`, `src/controladores/useSesionAdmin.ts`, `src/vistas/admin/`)
    - Mensajes de error que no revelen si un correo existe.
    - Que el panel nunca muestre datos sin que la base confirme que el usuario es administrador
      (la verificación real debe estar en SQL, no solo en React).

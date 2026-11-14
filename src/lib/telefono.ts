@@ -13,3 +13,10 @@ export function formatearTelefono(telefono: string) {
     ? `+56 9 ${n.slice(3, 7)} ${n.slice(7)}`
     : telefono
 }
+
+// Lo que se guarda en la base: se aceptan guiones y paréntesis al escribir, pero la tabla
+// reservas solo permite números y espacios ('+56 (9) 1234-5678' → '+56 9 1234 5678')
+export const limpiarTelefono = (t: string) => t.replace(/[()-]/g, ' ').replace(/\s+/g, ' ').trim()
+
+// ¿La base lo va a aceptar? Misma regla que el check de la tabla reservas (schema.sql)
+export const telefonoValido = (t: string) => /^\+?[0-9 ]{8,16}$/.test(limpiarTelefono(t))

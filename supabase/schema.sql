@@ -169,7 +169,7 @@ grant execute on function horas_disponibles(integer, integer, date) to anon, aut
 grant execute on function crear_reserva(integer, integer, date, time, text, text) to anon, authenticated;
 
 -- ---------------------------------------------------------------------
--- Datos de ejemplo (los mismos de src/data/)
+-- Datos de ejemplo (los mismos de src/modelos/datos/)
 -- ---------------------------------------------------------------------
 insert into barberos (nombre, especialidad) values
   ('Matías', 'Fade y diseños'),
